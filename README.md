@@ -51,3 +51,8 @@ on the next setting change or native chat-window update.
 BootyChat targets the original WoW 1.12 interface. Other addons which own the same
 chat frames can conflict. Disable their chat customization before enabling
 BootyChat; coexistence with third-party chat replacements is not yet verified.
+
+If another addon changes scrolling while BootyChat is active, it keeps control
+of the mouse wheel and BootyChat continues applying appearance settings. The
+Chat page reports affected windows. Disable and enable BootyChat to apply its
+scrolling again; your channels and messages remain available.

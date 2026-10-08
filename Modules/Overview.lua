@@ -65,7 +65,11 @@ function Overview.Create(parent, host)
         local runtime = Chat.Core.Runtime.GetState()
         local native = Chat.Modules.NativeChat.GetState()
         local store, failure = Chat.Database.Ensure()
-        status:SetText(runtime.failure or failure or (native.active and "Chat customizations are active." or "Native chat customizations are disabled."))
+        local message = native.active and "Chat customizations are active." or "Native chat customizations are disabled."
+        if native.active and native.deferredWheels > 0 then
+            message = message .. " Another addon controls scrolling in " .. native.deferredWheels .. " window(s). Disable and enable BootyChat to apply its scrolling again."
+        end
+        status:SetText(runtime.failure or failure or message)
         enabled:SetText(store and store.enabled and "Disable" or "Enable")
         self:OnResize()
     end

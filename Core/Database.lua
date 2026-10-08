@@ -1,4 +1,6 @@
 local Chat = BootyChat
+local Assert = assert
+local function error(message) Assert(false, message) end
 local Configuration = Chat.Services.Configuration
 local Database = {SCHEMA_VERSION = 1}
 Chat.Database = Database

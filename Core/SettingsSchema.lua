@@ -1,4 +1,7 @@
 local Chat = BootyChat
+-- Shared Settings uses thrown failures to reject values and undo a profile.
+local Assert = assert
+local function error(message) Assert(false, message) end
 local Configuration, Runtime = Chat.Services.Configuration, Chat.Core.Runtime
 local fields, count
 local fontChoices = {{value = "native", text = "Native font"}, {value = "friz", text = "Friz Quadrata"},

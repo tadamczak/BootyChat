@@ -1,4 +1,7 @@
 local Chat = BootyChat
+-- Profile failures must still throw when another addon makes error a logger.
+local Assert = assert
+local function error(message) Assert(false, message) end
 local Configuration = Chat.Services.Configuration
 local Native = Chat.Modules.NativeChat
 local Runtime = {}

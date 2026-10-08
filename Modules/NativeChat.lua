@@ -1,10 +1,13 @@
 local Chat = BootyChat
+-- Some 1.12 addons replace global error with a nonthrowing chat logger.
+local Assert = assert
+local function error(message) Assert(false, message) end
 local Native = {}
 Chat.Modules.NativeChat = Native
 local Configuration = Chat.Services.Configuration
 local UI = (Chat.UI or BootyLib.UI).Components
 local records, editRecord = {}, nil
-local state = {active = false, restorationBlocked = false, windows = 0, foreignChanges = 0}
+local state = {active = false, restorationBlocked = false, windows = 0, foreignChanges = 0, deferredWheels = 0}
 local store, failureObserver
 local competingOwners = {"pfUI", "Prat", "Chatter"}
 local fonts = {friz = "Fonts\\FRIZQT__.TTF", arial = "Fonts\\ARIALN.TTF",
@@ -244,6 +247,17 @@ local function NewRecord(frame, name, fontOnly)
     return {frame = frame, name = name, leases = {}, textures = {}, buttons = {}}
 end
 local function Wheel(record, options)
+    -- A later handler may wrap our old callback. Leave it in control for this
+    -- activation instead of wrapping it again or stopping unrelated appearance.
+    local lease = record.wheel
+    if lease and record.frame:GetScript("OnMouseWheel") ~= lease.guard then
+        lease.enabled = false
+        record.wheel, record.leases.wheel = nil, nil
+        record.wheelDeferred = true
+        state.foreignChanges = state.foreignChanges + 1
+        state.deferredWheels = state.deferredWheels + 1
+    end
+    if record.wheelDeferred then return end
     if not options.wheel then
         if record.wheel then
             record.wheel.enabled = false
@@ -255,7 +269,7 @@ local function Wheel(record, options)
         return
     end
     Require(record.frame, {"IsMouseWheelEnabled", "EnableMouseWheel", "ScrollUp", "ScrollDown", "ScrollToTop", "ScrollToBottom"}, record.name)
-    local lease = record.wheel
+    lease = record.wheel
     if not lease then
         lease = {original = record.frame:GetScript("OnMouseWheel")}
         record.wheel = lease
@@ -283,7 +297,7 @@ local function Wheel(record, options)
         end
         Must(record.frame.SetScript, record.frame, "OnMouseWheel", lease.guard)
         if record.frame:GetScript("OnMouseWheel") ~= lease.guard then error("Native mousewheel script was declined.") end
-    elseif record.frame:GetScript("OnMouseWheel") ~= lease.guard then error(record.name .. " mousewheel has another owner.") end
+    end
     lease.speed, lease.shift, lease.enabled = options.wheelSpeed, options.shiftScroll, true
     Property(record, "wheel", ReadWheel, SetWheel, true)
 end
@@ -527,7 +541,8 @@ local function Release(record)
 end
 function Native.Stop()
     state.active = false
-    for _, record in pairs(records) do Disable(record) end
+    state.deferredWheels = 0
+    for _, record in pairs(records) do Disable(record); record.wheelDeferred = nil end
     if editRecord then Disable(editRecord) end
     local failure
     for _, record in pairs(records) do
