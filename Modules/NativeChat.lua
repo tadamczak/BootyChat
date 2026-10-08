@@ -25,9 +25,11 @@ local function CompetingOwner()
         end
     end
 end
-local function Call(callback, owner, a, b, c, d, e)
+local function Call(callback, ...)
     local previousThis, previousEvent, previousArg = this, event, arg1
-    local ok, first, second, third, fourth, fifth = pcall(callback, owner, a, b, c, d, e)
+    -- Lua 5.0's implicit arg.n keeps the exact count, including a trailing nil.
+    -- Native C methods see every argument; padding a setter can clear its script.
+    local ok, first, second, third, fourth, fifth = pcall(callback, unpack(arg))
     this, event, arg1 = previousThis, previousEvent, previousArg
     return ok, first, second, third, fourth, fifth
 end
@@ -80,8 +82,8 @@ local function Require(frame, methods, name)
         if type(frame[method]) ~= "function" then error(name .. " lacks " .. method .. ".") end
     end
 end
-local function Must(callback, owner, a, b, c, d, e)
-    local ok, result = Call(callback, owner, a, b, c, d, e)
+local function Must(callback, ...)
+    local ok, result = Call(callback, unpack(arg))
     if not ok then error(tostring(result)) end
     if result == false then error("A native chat write was declined.") end
     return result
@@ -485,8 +487,8 @@ local function Disable(record)
     for _, lease in pairs(record.textures) do lease.enabled = false end
     for _, lease in pairs(record.buttons) do lease.enabled = false end
 end
-local function Attempt(callback, owner, a, b, c, d, e)
-    local ran, ok, reason = Call(callback, owner, a, b, c, d, e)
+local function Attempt(callback, ...)
+    local ran, ok, reason = Call(callback, unpack(arg))
     if not ran then return false, tostring(ok) end
     return ok, reason
 end

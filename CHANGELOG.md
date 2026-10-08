@@ -1,5 +1,9 @@
 # Changelog
 
+## 0.1.0-dev.3 — 2026-10-08
+
+- Preserve exact native API argument counts when installing or restoring chat scrolling.
+
 ## 0.1.0-dev.2 — 2026-10-08
 
 - Keep chat appearance active when another addon takes over mouse-wheel scrolling.
