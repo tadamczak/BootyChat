@@ -33,19 +33,32 @@ local function Call(callback, ...)
     this, event, arg1 = previousThis, previousEvent, previousArg
     return ok, first, second, third, fourth, fifth
 end
-local function Equal(a, b)
+local function Equal(a, b, tolerance)
     if a == b then return true end
     if type(a) ~= type(b) then return false end
     if type(a) == "table" then
         -- Native frame references are identities, including clients/doubles
         -- that expose them as tables with cyclic parent/child relationships.
         if type(a.GetName) == "function" or type(b.GetName) == "function" then return false end
-        for key, value in pairs(a) do if not Equal(value, b[key]) then return false end end
+        for key, value in pairs(a) do if not Equal(value, b[key], tolerance) then return false end end
         for key in pairs(b) do if a[key] == nil then return false end end
         return true
     end
-    if type(a) == "number" then return math.abs(a - b) < 0.00001 end
+    if type(a) == "number" then return math.abs(a - b) < (tolerance or 0.00001) end
     return a == b
+end
+local function PropertyEqual(key, a, b)
+    -- Native layout getters use float rectangles and scale conversion. Keep
+    -- sub-millipixel readback noise separate from actual ownership changes.
+    local tolerance = (key == "width" or key == "height" or key == "points" or key == "geometry") and 0.001 or nil
+    return Equal(a, b, tolerance)
+end
+local function WriteFailure(record, key, desired, actual, restoring)
+    local action = restoring and "restoration" or "write"
+    if type(desired) == "number" and type(actual) == "number" then
+        return string.format("%s %s %s was declined (wanted %.9f, read %.9f).", record.name, key, action, desired, actual)
+    end
+    return record.name .. " " .. key .. " " .. action .. " was declined."
 end
 local function ReadFont(frame)
     local path, size, flags = frame:GetFont()
@@ -115,8 +128,8 @@ local function ReleaseProperty(record, key)
     if not lease then return true end
     local ok, current = Call(lease.read, record.frame)
     if not ok then return false, tostring(current) end
-    if Equal(current, lease.original) then record.leases[key] = nil; return true end
-    if not Equal(current, lease.applied) then
+    if PropertyEqual(key, current, lease.original) then record.leases[key] = nil; return true end
+    if not PropertyEqual(key, current, lease.applied) then
         -- A later owner changed this value. Its state is authoritative.
         state.foreignChanges = state.foreignChanges + 1
         record.leases[key] = nil
@@ -124,12 +137,12 @@ local function ReleaseProperty(record, key)
     end
     local written, failure = Call(lease.write, record.frame, lease.original)
     local inspected, actual = Call(lease.read, record.frame)
-    if written and failure ~= false and inspected and Equal(actual, lease.original) then
+    if written and failure ~= false and inspected and PropertyEqual(key, actual, lease.original) then
         record.leases[key] = nil
         return true
     end
     return false, tostring(not written and failure or not inspected and actual or
-        record.name .. " " .. key .. " restoration was declined.")
+        WriteFailure(record, key, lease.original, actual, true))
 end
 local function Property(record, key, read, write, desired)
     if desired == nil then
@@ -140,14 +153,14 @@ local function Property(record, key, read, write, desired)
     local lease = record.leases[key]
     local inspected, actual = Call(read, record.frame)
     if not inspected then error(tostring(actual)) end
-    if lease and not Equal(actual, lease.applied) then
+    if lease and not PropertyEqual(key, actual, lease.applied) then
         error(record.name .. " " .. key .. " has another owner.")
     end
     if not lease then
         lease = {read = read, write = write, original = actual}
         record.leases[key] = lease
     end
-    if lease.applied and Equal(actual, desired) then return end
+    if lease.applied and PropertyEqual(key, actual, desired) then return end
     lease.applied = desired
     local written, failure = Call(write, record.frame, desired)
     local inspected, after = Call(read, record.frame)
@@ -155,8 +168,8 @@ local function Property(record, key, read, write, desired)
     -- rollback can distinguish our change from a subsequent foreign change.
     if inspected then lease.applied = after end
     if not written then error(tostring(failure)) end
-    if failure == false or not inspected or not Equal(after, desired) then
-        error(not inspected and tostring(after) or record.name .. " " .. key .. " write was declined.")
+    if failure == false or not inspected or not PropertyEqual(key, after, desired) then
+        error(not inspected and tostring(after) or WriteFailure(record, key, desired, after))
     end
 end
 local function Shadow(record, mode, color, alpha, x, y)
@@ -841,13 +854,13 @@ local function Apply(value, refresh)
                     local geometry = record.leases[key]
                     if geometry then
                         local current = geometry.read(record.frame)
-                        if not Equal(current, geometry.applied) then geometry.original, geometry.applied = current, current end
+                        if not PropertyEqual(key, current, geometry.applied) then geometry.original, geometry.applied = current, current end
                     end
                 end
                 if record.tabLayout and record.tabLayout.leases.geometry then
                     local geometry = record.tabLayout.leases.geometry
                     local current = ReadTabGeometry(record.tabLayout.frame)
-                    if not Equal(current, geometry.applied) then geometry.original, geometry.applied = current, current end
+                    if not PropertyEqual("geometry", current, geometry.applied) then geometry.original, geometry.applied = current, current end
                 end
             end
         end

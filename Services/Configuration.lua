@@ -17,6 +17,7 @@ local editboxDefaults = {position = "bottom", fontSize = 14, arrowKeys = true,
     font = "native", fontOutline = "native", height = 0, gap = 2,
     shadowMode = "native", shadowColor = {0, 0, 0}, shadowAlpha = 1, shadowX = 1, shadowY = -1,
     backgroundColor = {0.02, 0.02, 0.02}, backgroundAlpha = -1, goldBorder = false}
+local historyDefaults = {enabled = true, persist = false, limit = 500}
 local fonts = {native = true, friz = true, arial = true, morpheus = true, skurri = true}
 local outlines = {native = true, none = true, OUTLINE = true, THICKOUTLINE = true}
 local positions = {native = true, top = true, bottom = true}
@@ -114,6 +115,24 @@ function Configuration.ValidateWindows(windows)
     end
     return true
 end
+function Configuration.GetHistoryDefault(key) return historyDefaults[key] end
+function Configuration.ValidateHistoryValue(key, value)
+    if historyDefaults[key] == nil then return false, "Unknown history setting: " .. tostring(key) end
+    if value == nil then return true end
+    local valid = key == "limit" and Integer(value, 1, 2000) or
+        key ~= "limit" and type(value) == "boolean"
+    if not valid then return false, "Invalid history setting: " .. tostring(key) end
+    return true
+end
+local function ValidateHistory(section)
+    if section == nil then return true end
+    if type(section) ~= "table" or getmetatable(section) ~= nil then return false, "Invalid history preferences." end
+    for key, value in pairs(section) do
+        local valid, failure = Configuration.ValidateHistoryValue(key, value)
+        if not valid then return false, failure end
+    end
+    return true
+end
 function Configuration.Validate(store)
     if store ~= nil and type(store) ~= "table" then return false, "Invalid BootyChat saved data. Preserve the saved file before repairing it." end
     if store == nil then return true end
@@ -127,6 +146,14 @@ function Configuration.Validate(store)
     if not valid then return false, failure end
     valid, failure = ValidateSection(store.editbox, true)
     if not valid then return false, failure end
+    valid, failure = ValidateHistory(store.history)
+    if not valid then return false, failure end
+    if store.historyData ~= nil then
+        local History = BootyChat.Services.History
+        if not History then return false, "The chat history service is unavailable." end
+        valid, failure = History.ValidateSnapshot(store.historyData, Configuration.WindowCount())
+        if not valid then return false, failure end
+    end
     return Configuration.ValidateWindows(store.windows)
 end
 function Configuration.Resolve(store, id)
@@ -144,6 +171,14 @@ function Configuration.ResolveEditbox(store)
     for key, value in pairs(editboxDefaults) do
         if store.editbox and store.editbox[key] ~= nil then value = store.editbox[key] end
         result[key] = Configuration.Copy(value)
+    end
+    return result
+end
+function Configuration.ResolveHistory(store)
+    local result = {}
+    for key, value in pairs(historyDefaults) do
+        if store.history and store.history[key] ~= nil then value = store.history[key] end
+        result[key] = value
     end
     return result
 end

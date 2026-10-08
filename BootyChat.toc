@@ -1,15 +1,18 @@
 ## Interface: 11200
 ## Title: BootyChat
-## Notes: Native chat appearance and scrolling. Standalone or integrated into Booty Suite.
+## Notes: Native chat appearance, bounded history, search and copying. Standalone or integrated into Booty Suite.
 ## Author: Mukla
-## Version: 0.1.0-dev.4
+## Version: 0.1.0-dev.5
 ## Dependencies: BootyLib
 ## SavedVariables: BootyChatDB
 
 Core\Bootstrap.lua
+Services\History.lua
 Services\Configuration.lua
 Core\Database.lua
 Modules\NativeChat.lua
+Modules\HistoryCapture.lua
+Modules\HistoryView.lua
 Modules\Overview.lua
 Core\Runtime.lua
 Core\SettingsSchema.lua

@@ -1,5 +1,12 @@
 # Changelog
 
+## 0.1.0-dev.5 — 2026-10-08
+
+- Add bounded per-window history, literal search, twelve-message pages, native link preview and complete selected/page copying.
+- Add optional cross-session history saving, retention settings and confirmed clearing, independent of appearance profiles.
+- Preserve native message arguments, results, errors and later addon ownership during collection.
+- Accept native geometry rounding when applying and restoring chat dimensions; report requested and read-back values on real refusals.
+
 ## 0.1.0-dev.4 — 2026-10-08
 
 - Add message shadows, line spacing, fading controls, background margins and border opacity.

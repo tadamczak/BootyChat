@@ -6,8 +6,10 @@ Chat.Modules.Overview = Overview
 function Overview.Create(parent, host)
     local frame = UI.CreateContainer(nil, parent)
     frame:SetAllPoints(parent)
-    local canvas = UI.CreateResponsiveCanvas(frame, "BootyChatOverviewScroll")
-    local view = {frame = frame, canvas = canvas}
+    local summary = UI.CreateContainer(nil, frame)
+    summary:SetAllPoints(frame)
+    local canvas = UI.CreateResponsiveCanvas(summary, "BootyChatOverviewScroll")
+    local view = {frame = frame, canvas = canvas, summary = summary, mode = "overview"}
     local title = UI.CreateHeading(canvas, "Native chat", 2, "gold")
     local status = UI.CreateComponentLabel(canvas, "", "white")
     status:SetJustifyH("LEFT"); status:SetJustifyV("TOP")
@@ -17,7 +19,8 @@ function Overview.Create(parent, host)
     local settings = UI.CreateButton(canvas, nil, "Settings", 104, 24)
     local enabled = UI.CreateButton(canvas, nil, "Disable", 104, 24)
     local reset = UI.CreateButton(canvas, nil, "Reset window", 120, 24)
-    UI.StyleActionButton(settings); UI.StyleActionButton(enabled); UI.StyleActionButton(reset)
+    local history = UI.CreateButton(canvas, nil, "History", 96, 24)
+    UI.StyleActionButton(settings); UI.StyleActionButton(enabled); UI.StyleActionButton(reset); UI.StyleActionButton(history)
     local choices = {}
     for id = 1, Chat.Services.Configuration.WindowCount() do choices[id] = {value = id, text = Chat.Services.Configuration.WindowLabel(id)} end
     view.selectedWindow = 1
@@ -26,7 +29,8 @@ function Overview.Create(parent, host)
         buttonOffset = 120, labelValue = true, choices = choices,
         getValue = function() return view.selectedWindow end,
         onSelect = function(id) view.selectedWindow = id end})
-    local actions = {settings, enabled, reset}
+    local actions = {settings, enabled, reset, history}
+    history:SetScript("OnClick", function() view:ShowHistory() end)
     settings:SetScript("OnClick", function() host.OpenSettings() end)
     enabled:SetScript("OnClick", function()
         local store = Chat.Database.Ensure()
@@ -58,10 +62,12 @@ function Overview.Create(parent, host)
     function view:OnResize()
         if not frame:IsVisible() then return end
         local width, height = UI.GetFrameSpan(parent)
-        UI.LayoutResponsiveCanvas(canvas, Measure, nil, math.max(1, width), math.max(1, height))
+        if self.mode == "history" and self.history then self.history:OnResize(width, height)
+        else UI.LayoutResponsiveCanvas(canvas, Measure, nil, math.max(1, width), math.max(1, height)) end
     end
     function view:Refresh()
         if not frame:IsVisible() then return end
+        if self.mode == "history" and self.history then return self.history:Refresh() end
         local runtime = Chat.Core.Runtime.GetState()
         local native = Chat.Modules.NativeChat.GetState()
         local store, failure = Chat.Database.Ensure()
@@ -73,10 +79,27 @@ function Overview.Create(parent, host)
         enabled:SetText(store and store.enabled and "Disable" or "Enable")
         self:OnResize()
     end
-    function view:Show() frame:Show(); self:Refresh(); return true end
-    function view:Hide() selection.panel:Hide(); frame:Hide(); return true end
-    frame:SetScript("OnHide", function() selection.panel:Hide() end)
+    function view:ShowHistory()
+        if not self.history then self.history = Chat.Modules.HistoryView.Create(frame, host, function() view:ShowOverview() end, parent) end
+        self.mode = "history"; selection.panel:Hide(); summary:Hide(); frame:Show()
+        return self.history:Show()
+    end
+    function view:ShowOverview()
+        if self.history then self.history:Hide() end
+        self.mode = "overview"; summary:Show(); frame:Show(); self:Refresh(); return true
+    end
+    function view:Show()
+        frame:Show()
+        if self.mode == "history" and self.history then return self.history:Show() end
+        summary:Show(); self:Refresh(); return true
+    end
+    function view:Hide()
+        selection.panel:Hide(); if self.history then self.history:Hide() end
+        frame:Hide(); return true
+    end
+    frame:SetScript("OnHide", function() selection.panel:Hide(); if view.history then view.history:Hide() end end)
     frame:Hide()
     view.status, view.settingsButton, view.enabledButton, view.resetButton = status, settings, enabled, reset
+    view.historyButton = history
     return view
 end

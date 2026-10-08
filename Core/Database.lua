@@ -14,6 +14,7 @@ local function Defaults(store)
     store.defaults = store.defaults or {}
     store.windows = store.windows or {}
     store.editbox = store.editbox or {}
+    store.history = store.history or {}
     if type(store.presentation) ~= "table" then store.presentation = {} end
     if type(store.presentation.windows) ~= "table" then store.presentation.windows = {} end
     if type(store.presentation.minimap) ~= "table" then store.presentation.minimap = {angle = 225} end

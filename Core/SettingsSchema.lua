@@ -111,7 +111,7 @@ end
 local function Build()
     fields = {{key = "enabled", label = "Enable native chat customizations", type = "checkbox", default = true,
         path = {"Chat", "General"}, profile = false,
-        tooltip = "Turning this off restores the native chat appearance and scrolling. Your channels and messages remain available.",
+        tooltip = "Turning this off restores native appearance and scrolling, and pauses history collection. Your channels and messages remain available.",
         set = function(value) Required(Runtime.SetEnabled(value)) end},
         {key = "hideMinimapIcon", label = "Hide minimap icon", type = "checkbox", default = false,
         path = {"Chat", "General"}, set = function(value) Required(Runtime.SetMinimapHidden(value)) end}}
@@ -147,6 +147,24 @@ local function Build()
         field.default, field.path = Configuration.GetDefault(key, true), {"Chat", "Input", definition.group}
         field.get = function(store) return store.editbox[key] end
         field.set = function(value) Required(Runtime.SetEditboxOption(key, NumberValue(definition, value))) end
+        table.insert(fields, field)
+    end
+    local historyDefinitions = {
+        {key = "enabled", label = "Collect chat history", type = "checkbox",
+            tooltip = "Collect messages submitted to native chat windows. Pausing collection keeps existing session history."},
+        {key = "persist", label = "Remember history between sessions", type = "checkbox",
+            tooltip = "Save bounded history on logout or reload. Turning this off clears the saved copy and retains the current session."},
+        {key = "limit", label = "Maximum history entries", type = "choice", choices = {
+            {value = 100, text = "100"}, {value = 250, text = "250"}, {value = 500, text = "500"},
+            {value = 1000, text = "1000"}, {value = 2000, text = "2000"}},
+            tooltip = "A global limit across all native windows, also bounded to 256 KiB of message text. Lowering the limit removes the oldest entries."},
+    }
+    for _, definition in ipairs(historyDefinitions) do
+        local key, field = definition.key, Field(definition)
+        field.key, field.durableKey, field.profile = "history_" .. key, "history", false
+        field.default, field.path = Configuration.GetHistoryDefault(key), {"Chat", "History"}
+        field.get = function(store) return store.history[key] end
+        field.set = function(value) Required(Runtime.SetHistoryOption(key, value)) end
         table.insert(fields, field)
     end
 end
