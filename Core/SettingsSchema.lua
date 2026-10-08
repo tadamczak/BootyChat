@@ -111,7 +111,7 @@ end
 local function Build()
     fields = {{key = "enabled", label = "Enable native chat customizations", type = "checkbox", default = true,
         path = {"Chat", "General"}, profile = false,
-        tooltip = "Turning this off restores native appearance and scrolling, and pauses history collection. Your channels and messages remain available.",
+        tooltip = "Turning this off restores native appearance and scrolling, and pauses history, filters and mentions. Your channels remain available.",
         set = function(value) Required(Runtime.SetEnabled(value)) end},
         {key = "hideMinimapIcon", label = "Hide minimap icon", type = "checkbox", default = false,
         path = {"Chat", "General"}, set = function(value) Required(Runtime.SetMinimapHidden(value)) end}}
@@ -165,6 +165,39 @@ local function Build()
         field.default, field.path = Configuration.GetHistoryDefault(key), {"Chat", "History"}
         field.get = function(store) return store.history[key] end
         field.set = function(value) Required(Runtime.SetHistoryOption(key, value)) end
+        table.insert(fields, field)
+    end
+    local scopeChoices = {{value = "channels", text = "Named channels"}, {value = "public", text = "Channels, Say and Yell"},
+        {value = "group", text = "Guild, party, raid and battleground"}, {value = "all", text = "All player messages"}}
+    local scopeHelp = "Only messages displayed in native chat windows are processed. Loot, system, NPC and combat messages are excluded. Other addons still receive the original events. Native whisper sounds and tab flashing remain active."
+    local channelHelp = "Separate exact channel names with semicolons, for example World;Trade. Use the name without its number or zone suffix. Empty means all channels in the selected scope. Maximum 16 names, 80 bytes per name."
+    local termHelp = "Separate literal phrases with semicolons. ASCII letters ignore case; other characters match exactly. No patterns or wildcards. Maximum 32 phrases, 128 bytes each."
+    local moderationDefinitions = {
+        {key = "blockedEnabled", label = "Hide messages containing blocked phrases", type = "checkbox", group = "Filters"},
+        {key = "blockedTerms", label = "Blocked phrases (semicolon separated)", type = "text", maxLength = 4096, tooltip = termHelp, group = "Filters"},
+        {key = "filterScope", label = "Filter and repetition scope", type = "choice", choices = scopeChoices, tooltip = scopeHelp, group = "Filters"},
+        {key = "channels", label = "Filtered channel names", type = "text", maxLength = 1536, tooltip = channelHelp, group = "Filters"},
+        {key = "repeatEnabled", label = "Hide repeated messages", type = "checkbox", group = "Filters"},
+        {key = "repeatSeconds", label = "Repeat blocking window (seconds)", type = "slider", min = 1, max = 120, step = 1,
+            tooltip = "Repeated text from the same sender, message type and channel is hidden separately in each native window. Only a successfully displayed message starts the timer.", group = "Filters"},
+        {key = "mentionEnabled", label = "Enable mentions", type = "checkbox", group = "Mentions"},
+        {key = "mentionScope", label = "Mention scope", type = "choice", choices = scopeChoices, tooltip = scopeHelp, group = "Mentions"},
+        {key = "mentionChannels", label = "Mention channel names", type = "text", maxLength = 1536, tooltip = channelHelp, group = "Mentions"},
+        {key = "mentionPlayer", label = "Match my character name", type = "checkbox", group = "Mentions"},
+        {key = "mentionTerms", label = "Additional mention phrases", type = "text", maxLength = 4096, tooltip = termHelp, group = "Mentions"},
+        {key = "mentionWholeWord", label = "Match whole words", type = "checkbox", tooltip = "For example Ann matches Ann, but does not match Anna. Names in sender prefixes are excluded.", group = "Mentions"},
+        {key = "mentionHighlight", label = "Color mentioned messages", type = "checkbox", group = "Mentions"},
+        {key = "mentionColor", label = "Mention text color", type = "color", group = "Mentions"},
+        {key = "mentionSound", label = "Play a sound for mentions", type = "checkbox", tooltip = "Uses the native TellMessage sound. Incoming whispers keep their own native alert. Messages you send do not trigger mentions.", group = "Mentions"},
+        {key = "alertCooldown", label = "Minimum time between mention sounds", type = "slider", min = 1, max = 60, step = 1,
+            tooltip = "A shared cooldown prevents repeated sounds when the same message appears in several windows.", group = "Mentions"},
+    }
+    for _, definition in ipairs(moderationDefinitions) do
+        local key, field = definition.key, Field(definition)
+        field.key, field.durableKey, field.profile = "moderation_" .. key, "moderation", false
+        field.default, field.path = Configuration.GetModerationDefault(key), {"Chat", definition.group}
+        field.get = function(store) return store.moderation[key] end
+        field.set = function(value) Required(Runtime.SetModerationOption(key, value)) end
         table.insert(fields, field)
     end
 end

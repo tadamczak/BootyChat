@@ -29,9 +29,10 @@ scrolling and the shared input box.
 - Bounded history of messages delivered to native windows, with literal text search and window filters.
 - Twelve-message pages, clickable native link preview, and copying a selected message or page.
 - Optional history across sessions and explicit clearing for one window or all windows.
+- Optional blocked phrases and repeated-message hiding, scoped to selected channels or player-message groups.
+- Character-name and custom-phrase mentions, adjustable text color and optional sound with a cooldown.
 
-This development build awaits verification in the game client. Spam filters
-and mentions are planned additions.
+This development build awaits verification in the game client.
 
 ## Installation
 
@@ -92,6 +93,23 @@ or UI reload. Disabling it removes the saved copy and keeps the current session.
 History and its settings are separate from appearance profiles. Disabling
 BootyChat or history collection keeps retained messages available for browsing.
 
+Chat > Filters controls blocked phrases and repeated messages. Both start off.
+Choose named channels, public chat, guild/party/raid/battleground chat, or all
+player messages. Separate channel names and phrases with semicolons, for example
+`World;Trade`. Channel names match exactly without their number or zone suffix;
+an empty channel list covers all channels within the chosen scope. Blocked
+phrases match visible message text literally. Set the repeat window from 1 to
+120 seconds; repeats are checked separately in each native window.
+
+Chat > Mentions starts off and has its own scope and channel list. Match your
+character name, additional phrases, or both. Choose whole-word matching,
+message color and an optional sound with a 1–60 second cooldown. Your own
+messages do not trigger mentions. Incoming whispers retain their native alert.
+Lists accept up to 32 phrases of 128 bytes each, or 16 channel names of 80 bytes
+each. ASCII letters ignore case; other characters match exactly. Filtering and
+mentions remain available when history collection is paused. Appearance profiles
+preserve these preferences. Disabling BootyChat pauses all three features.
+
 ## Compatibility
 
 BootyChat targets the original WoW 1.12 interface. Other addons which own the same
@@ -104,5 +122,10 @@ Chat page reports affected windows. Disable and enable BootyChat to apply its
 scrolling again; your channels and messages remain available.
 
 If another addon takes over a native window's message method after BootyChat
-starts, collection for that window pauses until BootyChat is disabled and
+starts, history, filters and mentions for that window pause until BootyChat is disabled and
 enabled again. Retained history is never inserted back into native chat.
+
+Message filters affect native-window display. Loot, system, combat and NPC
+messages are excluded; other addons still receive the original chat events.
+Hidden messages are omitted from BootyChat history and mention alerts. Native
+whisper sounds and flashing tabs remain available even if a whisper is hidden.

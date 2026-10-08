@@ -4,13 +4,27 @@ Chat.Modules.HistoryCapture = Capture
 local Assert = assert
 local function Raise(message) Assert(false, message) end
 local Configuration = Chat.Services.Configuration
-local records, history, observer = {}, nil, nil
-local state = {active = false, restorationBlocked = false, deferred = 0, windows = 0, foreignChanges = 0}
+local records, history, processor, observer = {}, nil, nil, nil
+local collecting = true
+local state = {active = false, collecting = false, restorationBlocked = false, deferred = 0, windows = 0, foreignChanges = 0}
 local function Global(name) return type(getglobal) == "function" and getglobal(name) or _G[name] end
 local function Pack(...) return arg end
 local function Results(values) return unpack(values) end
 local function ValidHistory(value)
     return type(value) == "table" and type(value.Append) == "function" and type(value.GetStats) == "function"
+end
+function Capture.SetProcessor(value)
+    if value ~= nil and (type(value) ~= "table" or type(value.IsActive) ~= "function" or
+        type(value.Evaluate) ~= "function" or type(value.Commit) ~= "function" or type(value.Reset) ~= "function") then
+        return false, "A chat message processor is required."
+    end
+    processor, state.processor = value, value
+    return true
+end
+function Capture.SetCollecting(value)
+    if type(value) ~= "boolean" then return false, "Choose enabled or disabled for history collection." end
+    collecting, state.collecting = value, state.active and value
+    return true
 end
 local function Write(owner, value) owner.AddMessage = value end
 local function Release(record)
@@ -24,25 +38,37 @@ local function Release(record)
         record.lease = nil
         return true
     end
-    local previousThis, previousEvent, previousArg = this, event, arg1
+    local previousThis, previousEvent, p1, p2, p3, p4, p5, p6, p7, p8, p9, p10 = this, event, arg1, arg2, arg3, arg4, arg5, arg6, arg7, arg8, arg9, arg10
     local ok, reason = pcall(Write, lease.frame, lease.original)
-    this, event, arg1 = previousThis, previousEvent, previousArg
+    this, event, arg1, arg2, arg3, arg4, arg5, arg6, arg7, arg8, arg9, arg10 = previousThis, previousEvent, p1, p2, p3, p4, p5, p6, p7, p8, p9, p10
     local after = lease.frame.AddMessage
     if ok and after == lease.original then record.lease = nil; return true end
     return false, tostring(not ok and reason or record.name .. " AddMessage restoration was declined.")
 end
 function Capture.Stop()
-    state.active, state.deferred, state.windows = false, 0, 0
+    local wasActive = state.active
+    local resetProcessor = state.resetBlocked or wasActive and processor
+    state.active, state.collecting, state.deferred, state.windows = false, false, 0, 0
     for _, record in pairs(records) do
         if record.lease then record.lease.enabled = false end
         record.deferred = nil
     end
     local failure
     for _, record in pairs(records) do
-        local previousThis, previousEvent, previousArg = this, event, arg1
+        local previousThis, previousEvent, p1, p2, p3, p4, p5, p6, p7, p8, p9, p10 = this, event, arg1, arg2, arg3, arg4, arg5, arg6, arg7, arg8, arg9, arg10
         local ok, restored, reason = pcall(Release, record)
-        this, event, arg1 = previousThis, previousEvent, previousArg
+        this, event, arg1, arg2, arg3, arg4, arg5, arg6, arg7, arg8, arg9, arg10 = previousThis, previousEvent, p1, p2, p3, p4, p5, p6, p7, p8, p9, p10
         if not ok or not restored then failure = failure or tostring(ok and reason or restored) end
+    end
+    if resetProcessor then
+        local previousThis, previousEvent, p1, p2, p3, p4, p5, p6, p7, p8, p9, p10 = this, event, arg1, arg2, arg3, arg4, arg5, arg6, arg7, arg8, arg9, arg10
+        local ok, reset, reason = pcall(resetProcessor.Reset, resetProcessor)
+        this, event, arg1, arg2, arg3, arg4, arg5, arg6, arg7, arg8, arg9, arg10 = previousThis, previousEvent, p1, p2, p3, p4, p5, p6, p7, p8, p9, p10
+        if not ok or reset ~= true then
+            state.resetBlocked = resetProcessor
+            local message = tostring(not ok and reset or reason or "Chat moderation session reset was declined.")
+            failure = failure and failure .. " Moderation reset: " .. message or message
+        else state.resetBlocked = nil end
     end
     state.restorationBlocked = failure ~= nil
     if failure then state.failure = failure; return false, failure end
@@ -54,9 +80,9 @@ local function Failed(reason)
     state.failure = tostring(reason) .. (restored and "" or " Restoration: " .. tostring(restoreReason))
     -- Guards are inactive before a diagnostic callback can print to chat.
     if observer then
-        local previousThis, previousEvent, previousArg = this, event, arg1
+        local previousThis, previousEvent, p1, p2, p3, p4, p5, p6, p7, p8, p9, p10 = this, event, arg1, arg2, arg3, arg4, arg5, arg6, arg7, arg8, arg9, arg10
         local ok, notification = pcall(observer, state.failure)
-        this, event, arg1 = previousThis, previousEvent, previousArg
+        this, event, arg1, arg2, arg3, arg4, arg5, arg6, arg7, arg8, arg9, arg10 = previousThis, previousEvent, p1, p2, p3, p4, p5, p6, p7, p8, p9, p10
         if not ok then state.failure = state.failure .. " Notification: " .. tostring(notification) end
     end
 end
@@ -75,21 +101,48 @@ local function Owned(record, lease)
     end
     return false
 end
-local function Commit(record, lease, values)
-    if Owned(record, lease) then Append(lease, values) end
+local function Commit(record, lease, values, ticket)
+    if not Owned(record, lease) then return end
+    if collecting then Append(lease, values) end
+    if ticket and processor then
+        local ok, failure = processor:Commit(ticket)
+        if ok ~= true then Raise(failure or "Chat message processing was declined.") end
+    end
 end
-local function After(record, lease, values, result)
+local function After(record, lease, values, ticket, result)
     -- Native/foreign callback effects and errors remain authoritative. Only
     -- our own capture work borrows the context left by the original callback.
-    local previousThis, previousEvent, previousArg = this, event, arg1
-    local ok, reason = pcall(Commit, record, lease, values)
-    this, event, arg1 = previousThis, previousEvent, previousArg
+    local previousThis, previousEvent, p1, p2, p3, p4, p5, p6, p7, p8, p9, p10 = this, event, arg1, arg2, arg3, arg4, arg5, arg6, arg7, arg8, arg9, arg10
+    local ok, reason = pcall(Commit, record, lease, values, ticket)
+    this, event, arg1, arg2, arg3, arg4, arg5, arg6, arg7, arg8, arg9, arg10 = previousThis, previousEvent, p1, p2, p3, p4, p5, p6, p7, p8, p9, p10
     if not ok then
         local reported = pcall(Failed, reason)
-        if not reported then state.failure = "Chat history capture failed while reporting its error." end
+        if not reported then state.failure = "Chat message processing failed while reporting its error." end
     end
-    this, event, arg1 = previousThis, previousEvent, previousArg
+    this, event, arg1, arg2, arg3, arg4, arg5, arg6, arg7, arg8, arg9, arg10 = previousThis, previousEvent, p1, p2, p3, p4, p5, p6, p7, p8, p9, p10
     return Results(result)
+end
+local function Prepare(lease, values)
+    if not processor or not processor:IsActive() then return true end
+    local allow, ticket = processor:Evaluate(lease.id, lease.frame, values)
+    if type(allow) ~= "boolean" or ticket ~= nil and type(ticket) ~= "table" then Raise("Chat message policy returned an invalid result.") end
+    return allow, ticket
+end
+local function Before(lease, values)
+    if not processor then return true end
+    local r, g, b = values[3], values[4], values[5]
+    local previousThis, previousEvent, p1, p2, p3, p4, p5, p6, p7, p8, p9, p10 = this, event, arg1, arg2, arg3, arg4, arg5, arg6, arg7, arg8, arg9, arg10
+    local ok, allow, ticket = pcall(Prepare, lease, values)
+    this, event, arg1, arg2, arg3, arg4, arg5, arg6, arg7, arg8, arg9, arg10 = previousThis, previousEvent, p1, p2, p3, p4, p5, p6, p7, p8, p9, p10
+    if not ok then
+        values[3], values[4], values[5] = r, g, b
+        local reported = pcall(Failed, allow)
+        if not reported then state.failure = "Chat message processing failed while reporting its error." end
+        this, event, arg1, arg2, arg3, arg4, arg5, arg6, arg7, arg8, arg9, arg10 = previousThis, previousEvent, p1, p2, p3, p4, p5, p6, p7, p8, p9, p10
+        -- An unavailable policy never hides a native message.
+        return true
+    end
+    return allow, ticket
 end
 local function Install(record, frame, id)
     if record.frame and record.frame ~= frame then Raise(record.name .. " history frame was replaced.") end
@@ -111,10 +164,12 @@ local function Install(record, frame, id)
             local values = arg
             -- Disabled retained guards remain transparent even when a later
             -- wrapper has captured them; their original never changes.
-            if values[1] ~= lease.frame or not lease.enabled or not state.active then
+            if values[1] ~= lease.frame or not Owned(record, lease) then
                 return lease.original(unpack(values))
             end
-            return After(record, lease, values, Pack(lease.original(unpack(values))))
+            local allow, ticket = Before(lease, values)
+            if not allow then return end
+            return After(record, lease, values, ticket, Pack(lease.original(unpack(values))))
         end
         Write(frame, lease.guard)
         if frame.AddMessage ~= lease.guard then Raise(record.name .. " history capture was declined.") end
@@ -125,8 +180,8 @@ end
 function Capture.Apply(value)
     if not ValidHistory(value) then return false, "A history service is required for capture." end
     if not state.active then return false, "Chat history capture is not active." end
-    history, state.windows = value, 0
-    local previousThis, previousEvent, previousArg = this, event, arg1
+    history, state.windows, state.collecting = value, 0, collecting
+    local previousThis, previousEvent, p1, p2, p3, p4, p5, p6, p7, p8, p9, p10 = this, event, arg1, arg2, arg3, arg4, arg5, arg6, arg7, arg8, arg9, arg10
     local ok, reason = pcall(function()
         for id = 1, Configuration.WindowCount() do
             local name = "ChatFrame" .. id
@@ -138,7 +193,7 @@ function Capture.Apply(value)
             elseif id == 1 then Raise("Native ChatFrame1 is unavailable for history capture.") end
         end
     end)
-    this, event, arg1 = previousThis, previousEvent, previousArg
+    this, event, arg1, arg2, arg3, arg4, arg5, arg6, arg7, arg8, arg9, arg10 = previousThis, previousEvent, p1, p2, p3, p4, p5, p6, p7, p8, p9, p10
     if ok then state.failure = nil; return true end
     local restored, restoreReason = Capture.Stop()
     state.failure = tostring(reason) .. (restored and "" or " Restoration: " .. tostring(restoreReason))

@@ -75,7 +75,11 @@ function Overview.Create(parent, host)
         if native.active and native.deferredWheels > 0 then
             message = message .. " Another addon controls scrolling in " .. native.deferredWheels .. " window(s). Disable and enable BootyChat to apply its scrolling again."
         end
-        status:SetText(runtime.failure or failure or message)
+        local capture = Chat.Modules.HistoryCapture.GetState()
+        if native.active and capture.deferred > 0 then
+            message = message .. " Another addon controls messages in " .. capture.deferred .. " window(s); history, filters and mentions are paused there."
+        end
+        status:SetText(runtime.failure or runtime.historyFailure or failure or message)
         enabled:SetText(store and store.enabled and "Disable" or "Enable")
         self:OnResize()
     end

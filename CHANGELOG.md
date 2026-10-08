@@ -1,5 +1,11 @@
 # Changelog
 
+## 0.1.0-dev.6 — 2026-10-08
+
+- Add optional literal blocked phrases and repeated-message hiding with configurable scopes and exact channel lists.
+- Add character-name and custom-phrase mentions, whole-word matching, configurable text color and optional native sound with a shared cooldown.
+- Keep filters active independently of history collection and preserve native events, links, whisper behavior and later addon ownership.
+
 ## 0.1.0-dev.5 — 2026-10-08
 
 - Add bounded per-window history, literal search, twelve-message pages, native link preview and complete selected/page copying.

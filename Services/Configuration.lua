@@ -18,6 +18,7 @@ local editboxDefaults = {position = "bottom", fontSize = 14, arrowKeys = true,
     shadowMode = "native", shadowColor = {0, 0, 0}, shadowAlpha = 1, shadowX = 1, shadowY = -1,
     backgroundColor = {0.02, 0.02, 0.02}, backgroundAlpha = -1, goldBorder = false}
 local historyDefaults = {enabled = true, persist = false, limit = 500}
+local Moderation = BootyChat.Services.Moderation
 local fonts = {native = true, friz = true, arial = true, morpheus = true, skurri = true}
 local outlines = {native = true, none = true, OUTLINE = true, THICKOUTLINE = true}
 local positions = {native = true, top = true, bottom = true}
@@ -148,6 +149,8 @@ function Configuration.Validate(store)
     if not valid then return false, failure end
     valid, failure = ValidateHistory(store.history)
     if not valid then return false, failure end
+    valid, failure = Moderation.ValidateSection(store.moderation)
+    if not valid then return false, failure end
     if store.historyData ~= nil then
         local History = BootyChat.Services.History
         if not History then return false, "The chat history service is unavailable." end
@@ -182,3 +185,6 @@ function Configuration.ResolveHistory(store)
     end
     return result
 end
+function Configuration.ValidateModerationValue(key, value) return Moderation.ValidateValue(key, value) end
+function Configuration.GetModerationDefault(key) return Moderation.GetDefault(key) end
+function Configuration.ResolveModeration(store) return Moderation.Resolve(store.moderation) end

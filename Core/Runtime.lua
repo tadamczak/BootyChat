@@ -6,6 +6,7 @@ local Configuration = Chat.Services.Configuration
 local Native = Chat.Modules.NativeChat
 local Capture = Chat.Modules.HistoryCapture
 local History = Chat.Services.History
+local MessageProcessing = Chat.Modules.MessageProcessing
 local Runtime = {}
 Chat.Core.Runtime = Runtime
 local state = {initialized = false, stopped = false, batchDepth = 0}
@@ -51,11 +52,30 @@ OnHistoryLogout = function()
 end
 local function HistoryFailed(reason)
     state.historyFailure = tostring(reason)
+    local store, storeFailure = Chat.Database.Ensure()
+    if store then
+        local saved, saveFailure = Call(SaveHistory, store)
+        if not saved then state.historyFailure = state.historyFailure .. " History save: " .. tostring(saveFailure) end
+    else state.historyFailure = state.historyFailure .. " History save: " .. tostring(storeFailure) end
+    local logoutOK, logoutFailure = LogoutSubscription(false)
+    if not logoutOK then state.historyFailure = state.historyFailure .. " Persistence event cleanup: " .. tostring(logoutFailure) end
+    state.collecting = false
     Refresh()
-    if state.host then state.host.Print("Chat history: " .. state.historyFailure)
-    else BootyLib.Print("Chat history: " .. state.historyFailure) end
+    if state.host then state.host.Print("Chat messages: " .. state.historyFailure)
+    else BootyLib.Print("Chat messages: " .. state.historyFailure) end
 end
 local function SetHistoryLimit(value) return state.history:SetLimit(value) end
+local function ApplyMessageProcessing(store)
+    local options = Configuration.ResolveModeration(store)
+    local ok, failure = state.processing:Apply(options, type(UnitName) == "function" and UnitName("player") or nil)
+    if ok ~= true then return false, failure or "Chat message settings were declined." end
+    local active = state.processing:IsActive()
+    if type(active) ~= "boolean" then return false, "Chat message processor returned an invalid state." end
+    state.processingActive = active
+    ok, failure = Capture.SetProcessor(active and state.processing or nil)
+    if ok ~= true then return false, failure or "Chat message processor was declined." end
+    return Capture.SetCollecting(Configuration.ResolveHistory(store).enabled)
+end
 local function AdapterFailed(reason)
     state.failure = tostring(reason)
     local captured, captureFailure = Call(Capture.Stop)
@@ -78,15 +98,18 @@ local function Sync()
     if not store then state.failure = failure; return false, failure end
     local preferences = Configuration.ResolveHistory(store)
     local ok, reason
+    ok, reason = Call(ApplyMessageProcessing, store)
     state.applying = true
-    if state.stopped or not store.enabled then
-        local captured, captureFailure = Call(Capture.Stop)
-        ok, reason = Call(Native.Stop)
-        if not captured then ok, reason = false, tostring(reason or "") .. " History cleanup: " .. tostring(captureFailure) end
-    elseif Native.GetState().active then ok, reason = Call(Native.Apply, store)
-    else ok, reason = Call(Native.Start, store) end
     if ok then
-        if state.stopped or not store.enabled or not preferences.enabled or state.historyFailure then
+        if state.stopped or not store.enabled then
+            local captured, captureFailure = Call(Capture.Stop)
+            ok, reason = Call(Native.Stop)
+            if not captured then ok, reason = false, tostring(reason or "") .. " History cleanup: " .. tostring(captureFailure) end
+        elseif Native.GetState().active then ok, reason = Call(Native.Apply, store)
+        else ok, reason = Call(Native.Start, store) end
+    end
+    if ok then
+        if state.stopped or not store.enabled or not preferences.enabled and not state.processingActive or state.historyFailure then
             ok, reason = Call(Capture.Stop)
         elseif Capture.GetState().active then ok, reason = Call(Capture.Apply, state.history)
         else ok, reason = Call(Capture.Start, state.history) end
@@ -96,7 +119,7 @@ local function Sync()
     end
     state.applying = false
     local subscribed, subscribeFailure = Subscription(ok and Native.GetState().active == true)
-    local persisted, persistFailure = LogoutSubscription(ok and not state.stopped and Capture.GetState().active == true and preferences.persist)
+    local persisted, persistFailure = LogoutSubscription(ok and not state.stopped and Capture.GetState().collecting == true and preferences.persist)
     if not subscribed or not persisted or not ok then
         local captured, captureFailure = Call(Capture.Stop)
         local restored, restoreFailure = Call(Native.Stop)
@@ -113,7 +136,7 @@ local function Sync()
         local previousLimit = state.history:GetStats().limit
         ok, reason = Call(SetHistoryLimit, preferences.limit)
         if ok then
-            local collecting = Capture.GetState().active == true
+            local collecting = Capture.GetState().collecting == true
             if state.persist ~= preferences.persist or previousLimit ~= preferences.limit or state.collecting and not collecting then
                 ok, reason = Call(SaveHistory, store)
             end
@@ -150,6 +173,10 @@ function Runtime.Initialize()
         local preferences = Configuration.ResolveHistory(store)
         state.history, failure = History.New(preferences.limit, Configuration.WindowCount(), preferences.persist and store.historyData or nil)
         if not state.history then state.failure = failure; return false, failure end
+    end
+    if not state.processing then
+        state.processing, failure = MessageProcessing.New(Configuration.WindowCount())
+        if not state.processing then state.failure = failure; return false, failure end
     end
     if not state.initialized then
         Native.SetFailureObserver(AdapterFailed)
@@ -293,6 +320,14 @@ function Runtime.SetHistoryOption(key, value)
     if not store then return false, reason end
     state.historyFailure = nil
     return Commit(store, store.history, key, value)
+end
+function Runtime.SetModerationOption(key, value)
+    local valid, failure = Configuration.ValidateModerationValue(key, value)
+    if not valid then return false, failure end
+    local store, reason = Chat.Database.Ensure()
+    if not store then return false, reason end
+    state.historyFailure = nil
+    return Commit(store, store.moderation, key, value)
 end
 function Runtime.ClearHistory(windowId)
     if windowId ~= nil and not Configuration.ValidWindow(windowId) then return false, "Choose a native chat window." end

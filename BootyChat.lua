@@ -3,7 +3,7 @@ local Runtime = Chat.Core.Runtime
 Chat.Product = {
     id = "chat", name = "BootyChat", title = "BootyChat", settingsLabel = "Chat",
     version = Chat.version, apiVersion = Chat.API_VERSION, namespace = Chat,
-    description = "Native chat appearance, bounded history, search and copying, with your own tabs and filters.",
+    description = "Native chat appearance, bounded history, optional message filters and mentions, with your own tabs.",
     requiredAddons = {"BootyLib"},
     Initialize = Runtime.Initialize, OnHostReady = Runtime.OnHostReady,
     OnActivationFailed = Runtime.OnActivationFailed,
