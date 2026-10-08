@@ -183,6 +183,13 @@ function Runtime.ResetWindow(id)
     if not store then return false, failure end
     return Commit(store, store.windows, id, nil)
 end
+function Runtime.SetWindowOverrides(value)
+    local valid, failure = Configuration.ValidateWindows(value)
+    if not valid then return false, failure end
+    local store, reason = Chat.Database.Ensure()
+    if not store then return false, reason end
+    return Commit(store, store, "windows", value or {})
+end
 function Runtime.Open(command)
     if command == "enable" or command == "disable" then
         local ok, failure = Runtime.SetEnabled(command == "enable")

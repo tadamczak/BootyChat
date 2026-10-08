@@ -52,6 +52,28 @@ local function ReadFont(frame)
     return {path, size, flags or ""}
 end
 local function SetFont(frame, value) return frame:SetFont(value[1], value[2], value[3]) end
+local function ReadTextColor(frame)
+    local r, g, b, a = frame:GetTextColor()
+    return {r, g, b, a or 1}
+end
+local function ReadShadowColor(frame)
+    local r, g, b, a = frame:GetShadowColor()
+    return {r, g, b, a or 1}
+end
+local function SetShadowColor(frame, value) return frame:SetShadowColor(value[1], value[2], value[3], value[4]) end
+local function ReadShadowOffset(frame)
+    local x, y = frame:GetShadowOffset()
+    return {x, y}
+end
+local function SetShadowOffset(frame, value) return frame:SetShadowOffset(value[1], value[2]) end
+local function ReadFading(frame) return Enabled(frame:GetFading()) end
+local function SetFading(frame, value) return frame:SetFading(value and 1 or nil) end
+local function ReadTimeVisible(frame) return frame:GetTimeVisible() end
+local function SetTimeVisible(frame, value) return frame:SetTimeVisible(value) end
+local function ReadFadeDuration(frame) return frame:GetFadeDuration() end
+local function SetFadeDuration(frame, value) return frame:SetFadeDuration(value) end
+local function ReadSpacing(frame) return frame:GetSpacing() end
+local function SetSpacing(frame, value) return frame:SetSpacing(value) end
 local function ReadWidth(frame) return frame:GetWidth() end
 local function SetWidth(frame, value) return frame:SetWidth(value) end
 local function ReadHeight(frame) return frame:GetHeight() end
@@ -137,6 +159,12 @@ local function Property(record, key, read, write, desired)
         error(not inspected and tostring(after) or record.name .. " " .. key .. " write was declined.")
     end
 end
+local function Shadow(record, mode, color, alpha, x, y)
+    local custom = mode == "custom"
+    if custom then Require(record.frame, {"GetShadowColor", "SetShadowColor", "GetShadowOffset", "SetShadowOffset"}, record.name) end
+    Property(record, "shadowColor", ReadShadowColor, SetShadowColor, custom and {color[1], color[2], color[3], alpha} or nil)
+    Property(record, "shadowOffset", ReadShadowOffset, SetShadowOffset, custom and {x, y} or nil)
+end
 local function ReleaseSlot(owner, key, original, guard, script)
     local current = script and owner:GetScript(key) or owner[key]
     if current == original then return true end
@@ -158,10 +186,10 @@ local function ReportFailure(reason)
     end
     error(state.failure)
 end
-local function Texture(record, name, hidden)
+local function Texture(record, name, hidden, supplied)
     local lease = record.textures[name]
     if not hidden then return end
-    local texture = Global(record.name .. name)
+    local texture = supplied or Global(record.name .. name)
     if not texture then return end
     if lease and lease.texture ~= texture then error(record.name .. name .. " was replaced.") end
     if not lease then
@@ -193,9 +221,12 @@ local function ReleaseTexture(record, name)
         if ok and reason ~= false and not Equal(lease.texture:GetAlpha(), lease.nativeAlpha) then ok, reason = false, "Native chat texture restoration was declined." end
         if reason == false then ok, reason = false, "Native chat texture restoration was declined." end
     elseif current ~= lease.nativeAlpha then state.foreignChanges = state.foreignChanges + 1 end
+    -- A disabled guard must retain ownership until the refused value restore
+    -- can be retried; releasing its method slot would lose that evidence.
+    if not ok then return false, tostring(reason) end
     local released, slotReason = ReleaseSlot(lease.texture, "SetAlpha", lease.setter, lease.guard)
-    if ok and released then record.textures[name] = nil; return true end
-    return false, tostring(not ok and reason or slotReason)
+    if released then record.textures[name] = nil; return true end
+    return false, tostring(slotReason)
 end
 local function Button(record, name)
     local button = Global(name)
@@ -239,6 +270,7 @@ local function ReleaseButton(record, name)
         if ok and reason ~= false and not Enabled(lease.frame:IsShown()) then ok, reason = false, name .. " visibility restoration was declined." end
         if reason == false then ok, reason = false, name .. " visibility restoration was declined." end
     end
+    if not ok then return false, tostring(reason) end
     local showOK, showReason = ReleaseSlot(lease.frame, "Show", lease.show, lease.showGuard)
     local hideOK, hideReason = ReleaseSlot(lease.frame, "Hide", lease.hide, lease.hideGuard)
     if ok and showOK and hideOK then record.buttons[name] = nil; return true end
@@ -309,16 +341,23 @@ local function Appearance(record, options)
         if not record.surface then
             if not UI.Window or type(UI.Window.ApplyProjectSurface) ~= "function" then error("BootyLib project window surface is unavailable.") end
             record.surface = UI.CreateContainer(nil, record.frame)
-            record.surface:EnableMouse(false)
-            record.surface:SetFrameStrata(record.frame:GetFrameStrata())
-            record.surface:SetFrameLevel(math.max(0, record.frame:GetFrameLevel() - 1))
-            record.surface:SetPoint("TOPLEFT", record.frame, "TOPLEFT", -4, 4)
-            record.surface:SetPoint("BOTTOMRIGHT", record.frame, "BOTTOMRIGHT", 4, -4)
         end
+        if not record.surfaceReady then
+            Require(record.surface, {"EnableMouse", "SetFrameStrata", "SetFrameLevel"}, "Project chat surface")
+            Must(record.surface.EnableMouse, record.surface, false)
+            Must(record.surface.SetFrameStrata, record.surface, record.frame:GetFrameStrata())
+            Must(record.surface.SetFrameLevel, record.surface, math.max(0, record.frame:GetFrameLevel() - 1))
+            -- Keep a pooled allocation, but retry every unfinished setup step.
+            record.surfaceReady = true
+        end
+        Must(record.surface.ClearAllPoints, record.surface)
+        Must(record.surface.SetPoint, record.surface, "TOPLEFT", record.frame, "TOPLEFT", -options.backgroundPaddingX, options.backgroundPaddingY)
+        Must(record.surface.SetPoint, record.surface, "BOTTOMRIGHT", record.frame, "BOTTOMRIGHT", options.backgroundPaddingX, -options.backgroundPaddingY)
         UI.Window.ApplyProjectSurface(record.surface)
         local color = options.backgroundColor
         Must(record.surface.SetBackdropColor, record.surface, color[1], color[2], color[3], math.max(0, options.backgroundAlpha))
-        if not options.goldBorder then Must(record.surface.SetBackdropBorderColor, record.surface, 0, 0, 0, 0) end
+        local r, g, b = record.surface:GetBackdropBorderColor()
+        Must(record.surface.SetBackdropBorderColor, record.surface, r, g, b, options.goldBorder and options.borderAlpha or 0)
         Must(record.surface.Show, record.surface)
     elseif record.surface then Must(record.surface.Hide, record.surface) end
     for _, name in ipairs(textureNames) do
@@ -369,12 +408,128 @@ local function FitTab(record, tab, label)
     layout.desired = desired
     Property(record.tabLayout, "geometry", ReadTabGeometry, WriteTabGeometry, desired)
 end
-local function ApplyWindow(record, options)
+local function RefreshTabColor(record)
+    local lease = record.tabColor
+    if not lease or not lease.enabled then return end
+    if lease.frame.SetTextColor ~= lease.guard then error(record.name .. " tab color has another owner.") end
+    local selected = Global("SELECTED_DOCK_FRAME") or Global("SELECTED_CHAT_FRAME")
+    local color = not Enabled(record.frame.isDocked) or selected == record.frame
+    color = color and lease.activeColor or lease.inactiveColor
+    local alpha = lease.nativeColor[4]
+    local r, g, b, a = lease.frame:GetTextColor()
+    if Equal(r, color[1]) and Equal(g, color[2]) and Equal(b, color[3]) and Equal(a or 1, alpha) then
+        lease.applied = {r, g, b, a or 1}
+        return
+    end
+    local written, reason = Call(lease.setter, lease.frame, color[1], color[2], color[3], alpha)
+    local inspected, actual = Call(ReadTextColor, lease.frame)
+    if inspected then lease.applied = actual end
+    if not written then error(tostring(reason)) end
+    if reason == false or not inspected then error(not inspected and tostring(actual) or "Native chat tab color was declined.") end
+    if not Equal(actual, {color[1], color[2], color[3], alpha}) then error("Native chat tab color was declined.") end
+end
+local function RefreshTabColors()
+    for _, record in pairs(records) do RefreshTabColor(record) end
+end
+local function ReleaseTabColor(record)
+    local lease = record.tabColor
+    if not lease then return true end
+    lease.enabled = false
+    local current = ReadTextColor(lease.frame)
+    local ok, reason = true, nil
+    if Equal(current, lease.nativeColor) then
+        -- A previous refused write may already have restored the value.
+    elseif lease.frame.SetTextColor == lease.guard and lease.applied and Equal(current, lease.applied) then
+        ok, reason = Call(lease.setter, lease.frame, lease.nativeColor[1], lease.nativeColor[2], lease.nativeColor[3], lease.nativeColor[4])
+        if ok and reason ~= false and not Equal(ReadTextColor(lease.frame), lease.nativeColor) then ok, reason = false, "Native chat tab color restoration was declined." end
+        if reason == false then ok, reason = false, "Native chat tab color restoration was declined." end
+    elseif not Equal(current, lease.nativeColor) then state.foreignChanges = state.foreignChanges + 1 end
+    if not ok then return false, tostring(reason) end
+    local released, slotReason = ReleaseSlot(lease.frame, "SetTextColor", lease.setter, lease.guard)
+    if released then record.tabColor = nil; return true end
+    return false, tostring(slotReason)
+end
+local function ReleaseTabHooks(record)
+    local failure
+    if record.tabColorHooks then
+        for name, lease in pairs(record.tabColorHooks) do
+            lease.enabled = false
+            local ran, ok, reason = Call(ReleaseSlot, record.frame, name, lease.original, lease.guard, true)
+            if ran and ok then record.tabColorHooks[name] = nil
+            else failure = failure or tostring(ran and reason or ok) end
+        end
+    end
+    return failure == nil, failure
+end
+local function TabColor(record, label, options)
+    if options.tabColorMode ~= "custom" then
+        local hooksOK, hooksReason = ReleaseTabHooks(record)
+        local colorOK, colorReason = ReleaseTabColor(record)
+        if not hooksOK or not colorOK then error(hooksReason or colorReason) end
+        return
+    end
+    local lease = record.tabColor
+    if not lease then
+        Require(label, {"GetTextColor", "SetTextColor"}, record.name .. "TabText")
+        lease = {frame = label, setter = label.SetTextColor, nativeColor = ReadTextColor(label)}
+        record.tabColor = lease
+        lease.guard = function(owner, r, g, b, a)
+            if not lease.enabled or owner ~= lease.frame then
+                if a == nil then return lease.setter(owner, r, g, b) end
+                return lease.setter(owner, r, g, b, a)
+            end
+            lease.nativeColor = {r, g, b, a or 1}
+            local ok, reason = Call(RefreshTabColor, record)
+            if not ok then ReportFailure(reason) end
+        end
+        label.SetTextColor = lease.guard
+    elseif label.SetTextColor ~= lease.guard then error(record.name .. " tab color has another owner.") end
+    lease.activeColor, lease.inactiveColor, lease.enabled = options.tabActiveColor, options.tabInactiveColor, true
+    record.tabColorHooks = record.tabColorHooks or {}
+    for _, name in ipairs({"OnShow", "OnHide"}) do
+        local hook = record.tabColorHooks[name]
+        if not hook then
+            hook = {original = record.frame:GetScript(name)}
+            record.tabColorHooks[name] = hook
+            hook.guard = function()
+                if hook.original then
+                    if not hook.enabled then return hook.original() end
+                    local ok, reason = Call(hook.original)
+                    if not ok then ReportFailure(reason) end
+                end
+                if not hook.enabled or not state.active then return end
+                local ok, reason = Call(RefreshTabColors)
+                if not ok then ReportFailure(reason) end
+            end
+            Must(record.frame.SetScript, record.frame, name, hook.guard)
+            if record.frame:GetScript(name) ~= hook.guard then error("Native chat visibility script was declined.") end
+        elseif record.frame:GetScript(name) ~= hook.guard then error(record.name .. " " .. name .. " has another owner.") end
+        hook.enabled = true
+    end
+    RefreshTabColor(record)
+end
+local function ApplyMessageText(record, options)
     local original = record.leases.font and record.leases.font.original or ReadFont(record.frame)
     local font, size, outline = options.font == "native" and original[1] or fonts[options.font],
         options.fontSize == 0 and original[2] or options.fontSize,
         options.fontOutline == "native" and original[3] or options.fontOutline == "none" and "" or options.fontOutline
     Property(record, "font", ReadFont, SetFont, {font, size, outline})
+    Shadow(record, options.shadowMode, options.shadowColor, options.shadowAlpha, options.shadowX, options.shadowY)
+    local fading
+    if options.fadingMode ~= "native" then
+        Require(record.frame, {"GetFading", "SetFading"}, record.name)
+        fading = options.fadingMode == "on"
+    end
+    Property(record, "fading", ReadFading, SetFading, fading)
+    if options.timeVisible > 0 then Require(record.frame, {"GetTimeVisible", "SetTimeVisible"}, record.name) end
+    if options.fadeDuration > 0 then Require(record.frame, {"GetFadeDuration", "SetFadeDuration"}, record.name) end
+    if options.lineSpacing >= 0 then Require(record.frame, {"GetSpacing", "SetSpacing"}, record.name) end
+    Property(record, "timeVisible", ReadTimeVisible, SetTimeVisible, options.timeVisible > 0 and options.timeVisible or nil)
+    Property(record, "fadeDuration", ReadFadeDuration, SetFadeDuration, options.fadeDuration > 0 and options.fadeDuration or nil)
+    Property(record, "spacing", ReadSpacing, SetSpacing, options.lineSpacing >= 0 and options.lineSpacing or nil)
+end
+local function ApplyWindow(record, options)
+    ApplyMessageText(record, options)
     local tab = Global(record.name .. "Tab")
     if tab then
         if record.tab and record.tab ~= tab then error(record.name .. " tab was replaced.") end
@@ -384,9 +539,14 @@ local function ApplyWindow(record, options)
             if not record.tabText then record.tabText = NewRecord(label, record.name .. "TabText", true) end
             if record.tabText.frame ~= label then error(record.name .. " tab text was replaced.") end
             local native = record.tabText.leases.font and record.tabText.leases.font.original or ReadFont(label)
+            local tabFont = options.tabFont == "inherit" and options.font or options.tabFont
+            local tabSize = options.tabFontSize == -1 and options.fontSize or options.tabFontSize
+            local tabOutline = options.tabFontOutline == "inherit" and options.fontOutline or options.tabFontOutline
             Property(record.tabText, "font", ReadFont, SetFont,
-                {options.font == "native" and native[1] or font, options.fontSize == 0 and native[2] or size,
-                    options.fontOutline == "native" and native[3] or outline})
+                {tabFont == "native" and native[1] or fonts[tabFont], tabSize == 0 and native[2] or tabSize,
+                    tabOutline == "native" and native[3] or tabOutline == "none" and "" or tabOutline})
+            Shadow(record.tabText, options.tabShadowMode, options.tabShadowColor, options.tabShadowAlpha, options.tabShadowX, options.tabShadowY)
+            TabColor(record, label, options)
             if Enabled(record.frame.isDocked) then
                 -- Native FCF_DockUpdate fits and caps docked tabs on every
                 -- selection/resize. Preserve that single geometry owner.
@@ -397,9 +557,10 @@ local function ApplyWindow(record, options)
                 end
             else FitTab(record, tab, label) end
         end
+        local tabBorder = options.tabBorderMode == "on" or options.tabBorderMode == "inherit" and options.goldBorder
         if tab.openBorder and tab.openBorder ~= record.tabBorder then
-            if options.goldBorder then error(record.name .. " tab border has another owner.") end
-        elseif options.goldBorder then
+            if tabBorder then error(record.name .. " tab border has another owner.") end
+        elseif tabBorder then
             if record.tabBorder and not tab.openBorder then tab.openBorder = record.tabBorder end
             local applied, failure = Call(UI.SetOpenButtonBorder, tab, true, "bottom")
             if tab.openBorder then record.tabBorder = tab.openBorder end
@@ -427,15 +588,83 @@ local function ApplyWindow(record, options)
         end
     end
 end
+local function InputAppearance(options)
+    local record, frame = editRecord, editRecord.frame
+    local custom = options.goldBorder or options.backgroundAlpha >= 0
+    if custom then
+        if not record.inputRegions then
+            Require(frame, {"GetRegions"}, "ChatFrameEditBox")
+            local matched = {}
+            -- The 1.12 template has Left/Right plus an unnamed middle texture.
+            -- Match only its exact background artwork; the header stays native.
+            local regions = {frame:GetRegions()}
+            for _, region in ipairs(regions) do
+                if type(region.GetObjectType) == "function" and region:GetObjectType() == "Texture" and
+                    type(region.GetDrawLayer) == "function" and region:GetDrawLayer() == "BACKGROUND" and
+                    type(region.GetTexture) == "function" then
+                    local texture = region:GetTexture()
+                    local name = region:GetName()
+                    if name == "ChatFrameEditBoxLeft" and texture == "Interface\\ChatFrame\\UI-ChatInputBorder-Left" or
+                        (name == "ChatFrameEditBoxRight" or name == nil) and texture == "Interface\\ChatFrame\\UI-ChatInputBorder-Right" then
+                        table.insert(matched, region)
+                    end
+                end
+            end
+            if table.getn(matched) ~= 3 then
+                error("Native chat input background artwork is unavailable or ambiguous.")
+            end
+            record.inputRegions = matched
+        end
+        if not record.surface then
+            if type(UI.CreateFramedEditBox) ~= "function" or type(UI.SetProjectButtonOutline) ~= "function" then
+                error("BootyLib project input surface is unavailable.")
+            end
+            record.surface = UI.CreateFramedEditBox(frame, nil, frame:GetWidth())
+        end
+        if not record.surfaceReady then
+            Require(record.surface, {"EnableMouse", "EnableKeyboard", "SetAutoFocus", "SetFrameStrata", "SetFrameLevel", "SetAllPoints"}, "Project input surface")
+            Must(record.surface.EnableMouse, record.surface, false)
+            Must(record.surface.EnableKeyboard, record.surface, nil)
+            Must(record.surface.SetAutoFocus, record.surface, false)
+            Must(record.surface.SetFrameStrata, record.surface, frame:GetFrameStrata())
+            Must(record.surface.SetFrameLevel, record.surface, math.max(0, frame:GetFrameLevel() - 1))
+            Must(record.surface.SetAllPoints, record.surface, frame)
+            record.surfaceReady = true
+        end
+        local color = options.backgroundColor
+        Must(record.surface.SetBackdropColor, record.surface, color[1], color[2], color[3], math.max(0, options.backgroundAlpha))
+        Must(record.surface.SetBackdropBorderColor, record.surface, 0, 0, 0, 0)
+        Must(UI.SetProjectButtonOutline, record.surface, options.goldBorder)
+        record.inputOutline = record.surface.mosProjectOutline
+        Must(record.surface.Show, record.surface)
+        for index, region in ipairs(record.inputRegions) do Texture(record, "InputBackground" .. index, true, region) end
+    else
+        if record.surface then Must(record.surface.Hide, record.surface) end
+        if record.inputOutline then Must(record.inputOutline.Hide, record.inputOutline) end
+        for name in pairs(record.textures) do
+            local restored, reason = ReleaseTexture(record, name)
+            if not restored then error(reason) end
+        end
+    end
+end
 local function ApplyEditbox(options)
     local frame = Global("ChatFrameEditBox")
     if not frame then error("Native ChatFrameEditBox is unavailable.") end
     if editRecord and editRecord.frame ~= frame then error("Native ChatFrameEditBox was replaced.") end
     if not editRecord then editRecord = NewRecord(frame, "ChatFrameEditBox") end
-    if options.fontSize > 0 then
+    local customFont = options.font ~= "native" or options.fontSize > 0 or options.fontOutline ~= "native"
+    if customFont then
         local original = editRecord.leases.font and editRecord.leases.font.original or ReadFont(frame)
-        Property(editRecord, "font", ReadFont, SetFont, {original[1], options.fontSize, original[3]})
+        Property(editRecord, "font", ReadFont, SetFont, {options.font == "native" and original[1] or fonts[options.font],
+            options.fontSize == 0 and original[2] or options.fontSize,
+            options.fontOutline == "native" and original[3] or options.fontOutline == "none" and "" or options.fontOutline})
     else Property(editRecord, "font", ReadFont, SetFont, nil) end
+    Shadow(editRecord, options.shadowMode, options.shadowColor, options.shadowAlpha, options.shadowX, options.shadowY)
+    if options.height > 0 then
+        Require(frame, {"GetHeight", "SetHeight"}, "ChatFrameEditBox")
+        local _, size = frame:GetFont()
+        Property(editRecord, "height", ReadHeight, SetHeight, math.max(options.height, size + 8))
+    else Property(editRecord, "height", ReadHeight, SetHeight, nil) end
     Require(frame, {"GetAltArrowKeyMode", "SetAltArrowKeyMode"}, "ChatFrameEditBox")
     Property(editRecord, "arrows", ReadArrows, SetArrows, not options.arrowKeys)
     if options.position ~= "native" then
@@ -445,17 +674,21 @@ local function ApplyEditbox(options)
         local owner = Global("ChatFrame1")
         local top = options.position == "top"
         Property(editRecord, "points", ReadPoints, SetPoints, top and
-            {{"BOTTOMLEFT", owner, "TOPLEFT", -5, 2}, {"BOTTOMRIGHT", owner, "TOPRIGHT", 5, 2}} or
-            {{"TOPLEFT", owner, "BOTTOMLEFT", -5, -2}, {"TOPRIGHT", owner, "BOTTOMRIGHT", 5, -2}})
+            {{"BOTTOMLEFT", owner, "TOPLEFT", -5, options.gap}, {"BOTTOMRIGHT", owner, "TOPRIGHT", 5, options.gap}} or
+            {{"TOPLEFT", owner, "BOTTOMLEFT", -5, -options.gap}, {"TOPRIGHT", owner, "BOTTOMRIGHT", 5, -options.gap}})
     else Property(editRecord, "points", ReadPoints, SetPoints, nil) end
     local header = Global("ChatFrameEditBoxHeader")
     if header then
         if not editRecord.header then editRecord.header = NewRecord(header, "ChatFrameEditBoxHeader", true) end
-        if options.fontSize > 0 then
+        if editRecord.header.frame ~= header then error("Native chat input header was replaced.") end
+        if customFont then
             editRecord.headerDirty = true
             local original = editRecord.header.leases.font and editRecord.header.leases.font.original or ReadFont(header)
-            Property(editRecord.header, "font", ReadFont, SetFont, {original[1], options.fontSize, original[3]})
+            Property(editRecord.header, "font", ReadFont, SetFont, {options.font == "native" and original[1] or fonts[options.font],
+                options.fontSize == 0 and original[2] or options.fontSize,
+                options.fontOutline == "native" and original[3] or options.fontOutline == "none" and "" or options.fontOutline})
         else Property(editRecord.header, "font", ReadFont, SetFont, nil) end
+        Shadow(editRecord.header, options.shadowMode, options.shadowColor, options.shadowAlpha, options.shadowX, options.shadowY)
         if editRecord.headerDirty then
             if type(ChatEdit_UpdateHeader) ~= "function" then error("Native chat input header layout is unavailable.") end
             -- The existing helper measures the current destination caption;
@@ -463,6 +696,7 @@ local function ApplyEditbox(options)
             Must(ChatEdit_UpdateHeader, frame)
         end
     end
+    InputAppearance(options)
 end
 local function ApplyAll()
     state.windows = 0
@@ -486,6 +720,8 @@ local function Disable(record)
     if record.wheel then record.wheel.enabled = false end
     for _, lease in pairs(record.textures) do lease.enabled = false end
     for _, lease in pairs(record.buttons) do lease.enabled = false end
+    if record.tabColor then record.tabColor.enabled = false end
+    if record.tabColorHooks then for _, lease in pairs(record.tabColorHooks) do lease.enabled = false end end
 end
 local function Attempt(callback, ...)
     local ran, ok, reason = Call(callback, unpack(arg))
@@ -511,6 +747,9 @@ local function Release(record)
         local ok, reason = Attempt(ReleaseWheel, record)
         if ok then record.wheel = nil else failure = reason end
     end
+    local hooksOK, hooksReason = Attempt(ReleaseTabHooks, record)
+    local colorOK, colorReason = Attempt(ReleaseTabColor, record)
+    if not hooksOK or not colorOK then failure = failure or hooksReason or colorReason end
     for key in pairs(record.leases) do
         -- Keep input enabled until its callback owner can be verified/released.
         if key ~= "wheel" or not record.wheel then
@@ -528,6 +767,10 @@ local function Release(record)
     end
     if record.surface then
         local ok, reason = HideSurface(record.surface)
+        if not ok then failure = failure or reason end
+    end
+    if record.inputOutline then
+        local ok, reason = HideSurface(record.inputOutline)
         if not ok then failure = failure or reason end
     end
     if record.tabBorder then

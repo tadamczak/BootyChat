@@ -16,13 +16,18 @@ scrolling and the shared input box.
 ## Features
 
 - Common appearance with individual native-window overrides.
-- Font family, size and outline; background color and opacity; Booty gold borders.
+- Font family, size, outline, shadow color and offset, and line spacing.
+- Message fading, visibility time and fade duration.
+- Background color, opacity and margins; Booty gold borders with adjustable opacity.
+- Separate tab fonts, shadows, active/inactive caption colors and gold borders.
 - Mouse-wheel speed, Shift-wheel to the top or bottom, optional scroll-button hiding.
-- Native window-size overrides and input position, font size and arrow-key behavior.
+- Native window-size overrides and input position, minimum height, gap and arrow-key behavior.
+- Input fonts, shadows, background color and opacity, and project gold border.
+- Shared appearance profiles including individual window overrides.
 - Standalone configuration or the shared Booty Suite dashboard and settings.
 - Native tabs, channels, filters, docking, menus and item links remain available.
 
-This first development build awaits verification in the game client. Persistent
+This development build awaits verification in the game client. Persistent
 message history, search, copying, spam filters and mentions are planned additions.
 
 ## Installation
@@ -45,6 +50,22 @@ until you change an individual window setting; Reset window restores inheritance
 Set width or height to zero to keep the native size. Docked windows share the
 main window size. After detaching a window, its saved individual size applies
 on the next setting change or native chat-window update.
+
+Settings groups separate text, shadows, fading, backgrounds, scrolling, layout
+and tabs. Native choices restore the corresponding WoW setting; tab inheritance
+uses the chat text settings. Background margins extend the decorative surface.
+Input appearance keeps the native destination label, channel colors and typing
+behavior. An explicit minimum input height also leaves room for its font.
+Native chat background opacity keeps the original background. For the input,
+native opacity restores the original artwork when its project gold border is
+off; with that border on, it selects a transparent custom fill.
+
+Use the shared Profile page to add, save, load, delete or export an appearance
+profile. Profiles include the common appearance, input options and individual
+window overrides. Inherited window settings remain inherited after loading.
+The profile's Reset defaults action also clears window overrides; Reset window
+on the Chat page clears only the selected window. Loading or resetting a profile
+preserves whether BootyChat is enabled.
 
 ## Compatibility
 

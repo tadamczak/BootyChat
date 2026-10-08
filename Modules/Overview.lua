@@ -12,7 +12,7 @@ function Overview.Create(parent, host)
     local status = UI.CreateComponentLabel(canvas, "", "white")
     status:SetJustifyH("LEFT"); status:SetJustifyV("TOP")
     local help = UI.CreateComponentLabel(canvas,
-        "Create, rename and filter your tabs through the native right-click menu. Unlock and drag a native tab to move its window; use its native resize handle to resize it.\n\nOpen Settings for common appearance, individual windows and the shared input box. Window numbers follow the native chat slots. A zero width or height keeps the native size.\n\nDisable customizations to return to the native appearance. Channels, messages and item links stay in the native chat.", "white")
+        "Create, rename and filter your tabs through the native right-click menu. Unlock and drag a native tab to move its window; use its native resize handle to resize it.\n\nOpen Settings for common appearance, individual windows and the shared input box. Text, shadows, fading, backgrounds and tabs have separate groups. Window numbers follow the native chat slots. A zero width or height keeps the native size.\n\nUse the shared Profile page to save and load your appearance, including individual window overrides. Reset window restores the selected window's inheritance. Disable customizations to return to the native appearance. Channels, messages and item links stay in the native chat.", "white")
     help:SetJustifyH("LEFT"); help:SetJustifyV("TOP")
     local settings = UI.CreateButton(canvas, nil, "Settings", 104, 24)
     local enabled = UI.CreateButton(canvas, nil, "Disable", 104, 24)

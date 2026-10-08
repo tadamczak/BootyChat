@@ -6,11 +6,23 @@ local defaults = {
     backgroundColor = {0.02, 0.02, 0.02}, backgroundAlpha = 0.65,
     goldBorder = true, wheel = true, wheelSpeed = 3, shiftScroll = true,
     hideButtons = false, width = 0, height = 0,
+    shadowMode = "native", shadowColor = {0, 0, 0}, shadowAlpha = 1, shadowX = 1, shadowY = -1,
+    fadingMode = "native", timeVisible = 0, fadeDuration = 0, lineSpacing = -1,
+    backgroundPaddingX = 4, backgroundPaddingY = 4, borderAlpha = 1,
+    tabFont = "inherit", tabFontSize = -1, tabFontOutline = "inherit", tabBorderMode = "inherit",
+    tabColorMode = "native", tabActiveColor = {1, 0.82, 0}, tabInactiveColor = {0.7, 0.7, 0.7},
+    tabShadowMode = "native", tabShadowColor = {0, 0, 0}, tabShadowAlpha = 1, tabShadowX = 1, tabShadowY = -1,
 }
-local editboxDefaults = {position = "bottom", fontSize = 14, arrowKeys = true}
+local editboxDefaults = {position = "bottom", fontSize = 14, arrowKeys = true,
+    font = "native", fontOutline = "native", height = 0, gap = 2,
+    shadowMode = "native", shadowColor = {0, 0, 0}, shadowAlpha = 1, shadowX = 1, shadowY = -1,
+    backgroundColor = {0.02, 0.02, 0.02}, backgroundAlpha = -1, goldBorder = false}
 local fonts = {native = true, friz = true, arial = true, morpheus = true, skurri = true}
 local outlines = {native = true, none = true, OUTLINE = true, THICKOUTLINE = true}
 local positions = {native = true, top = true, bottom = true}
+local shadowModes = {native = true, custom = true}
+local fadingModes = {native = true, on = true, off = true}
+local borderModes = {inherit = true, on = true, off = true}
 
 local function Finite(value)
     return type(value) == "number" and value == value and value - value == 0
@@ -46,13 +58,30 @@ function Configuration.ValidateValue(key, value, editbox)
     if source[key] == nil then return false, "Unknown chat setting: " .. tostring(key) end
     if value == nil then return true end
     local valid
-    if key == "fontSize" then valid = value == 0 or Integer(value, 8, 24)
-    elseif key == "font" then valid = type(value) == "string" and fonts[value]
-    elseif key == "fontOutline" then valid = type(value) == "string" and outlines[value]
+    if key == "fontSize" or key == "tabFontSize" then
+        valid = key == "tabFontSize" and value == -1 or value == 0 or Integer(value, 8, 24)
+    elseif key == "font" or key == "tabFont" then
+        valid = type(value) == "string" and (fonts[value] or key == "tabFont" and value == "inherit")
+    elseif key == "fontOutline" or key == "tabFontOutline" then
+        valid = type(value) == "string" and (outlines[value] or key == "tabFontOutline" and value == "inherit")
     elseif key == "position" then valid = type(value) == "string" and positions[value]
+    elseif key == "shadowMode" or key == "tabShadowMode" or key == "tabColorMode" then
+        valid = type(value) == "string" and shadowModes[value]
+    elseif key == "fadingMode" then valid = type(value) == "string" and fadingModes[value]
+    elseif key == "tabBorderMode" then valid = type(value) == "string" and borderModes[value]
     elseif key == "backgroundAlpha" then valid = Finite(value) and (value == -1 or value >= 0 and value <= 1)
-    elseif key == "backgroundColor" then
-        valid = type(value) == "table"
+    elseif key == "shadowAlpha" or key == "tabShadowAlpha" or key == "borderAlpha" then
+        valid = Finite(value) and value >= 0 and value <= 1
+    elseif key == "shadowX" or key == "shadowY" or key == "tabShadowX" or key == "tabShadowY" then
+        valid = Finite(value) and value >= -8 and value <= 8
+    elseif key == "backgroundPaddingX" or key == "backgroundPaddingY" then
+        valid = Finite(value) and value >= 0 and value <= 24
+    elseif key == "gap" then valid = Finite(value) and value >= 0 and value <= 32
+    elseif key == "timeVisible" then valid = Integer(value, 0, 3600)
+    elseif key == "fadeDuration" then valid = value == 0 or Finite(value) and value >= 0.1 and value <= 30
+    elseif key == "lineSpacing" then valid = value == -1 or Finite(value) and value >= 0 and value <= 12
+    elseif string.find(key, "Color$") then
+        valid = type(value) == "table" and getmetatable(value) == nil
         if valid then
             for index = 1, 3 do
                 valid = valid and Finite(value[index]) and value[index] >= 0 and value[index] <= 1
@@ -61,16 +90,26 @@ function Configuration.ValidateValue(key, value, editbox)
         end
     elseif key == "wheelSpeed" then valid = Integer(value, 1, 10)
     elseif key == "width" then valid = value == 0 or Integer(value, 100, 4096)
-    elseif key == "height" then valid = value == 0 or Integer(value, 50, 4096)
+    elseif key == "height" then valid = value == 0 or (editbox and Integer(value, 16, 64) or not editbox and Integer(value, 50, 4096))
     else valid = type(value) == "boolean" end
     if not valid then return false, "Invalid chat setting: " .. tostring(key) end
     return true
 end
 local function ValidateSection(section, editbox)
     if section == nil then return true end
-    if type(section) ~= "table" then return false, "Invalid chat appearance settings." end
+    if type(section) ~= "table" or getmetatable(section) ~= nil then return false, "Invalid chat appearance settings." end
     for key, value in pairs(section) do
         local valid, failure = Configuration.ValidateValue(key, value, editbox)
+        if not valid then return false, failure end
+    end
+    return true
+end
+function Configuration.ValidateWindows(windows)
+    if windows == nil then return true end
+    if type(windows) ~= "table" or getmetatable(windows) ~= nil then return false, "Invalid saved chat windows." end
+    for id, appearance in pairs(windows) do
+        if not Configuration.ValidWindow(id) then return false, "Invalid saved chat window identifier." end
+        local valid, failure = ValidateSection(appearance)
         if not valid then return false, failure end
     end
     return true
@@ -88,15 +127,7 @@ function Configuration.Validate(store)
     if not valid then return false, failure end
     valid, failure = ValidateSection(store.editbox, true)
     if not valid then return false, failure end
-    if store.windows ~= nil then
-        if type(store.windows) ~= "table" then return false, "Invalid saved chat windows." end
-        for id, appearance in pairs(store.windows) do
-            if not Configuration.ValidWindow(id) then return false, "Invalid saved chat window identifier." end
-            valid, failure = ValidateSection(appearance)
-            if not valid then return false, failure end
-        end
-    end
-    return true
+    return Configuration.ValidateWindows(store.windows)
 end
 function Configuration.Resolve(store, id)
     local result = {}
@@ -112,7 +143,7 @@ function Configuration.ResolveEditbox(store)
     local result = {}
     for key, value in pairs(editboxDefaults) do
         if store.editbox and store.editbox[key] ~= nil then value = store.editbox[key] end
-        result[key] = value
+        result[key] = Configuration.Copy(value)
     end
     return result
 end

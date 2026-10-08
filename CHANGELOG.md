@@ -1,5 +1,12 @@
 # Changelog
 
+## 0.1.0-dev.4 — 2026-10-08
+
+- Add message shadows, line spacing, fading controls, background margins and border opacity.
+- Add independent tab fonts, shadows, active/inactive colors and borders, plus input appearance and layout controls.
+- Save sparse individual window overrides with shared appearance profiles and preserve native input and chat behavior.
+- Retry incomplete decorative setup and refused native artwork/button restoration.
+
 ## 0.1.0-dev.3 — 2026-10-08
 
 - Preserve exact native API argument counts when installing or restoring chat scrolling.
