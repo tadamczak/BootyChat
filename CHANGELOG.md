@@ -1,5 +1,11 @@
 # Changelog
 
+## 0.1.0-dev.7 — 2026-10-08
+
+- Index accepted repeated messages by context and exact body while retaining bounded session state and native link identities.
+- Avoid copying message bodies when native percent decoding is unnecessary.
+- Preserve original gameplay events for loot, rolls and soft reserves alongside chat filters and history.
+
 ## 0.1.0-dev.6 — 2026-10-08
 
 - Add optional literal blocked phrases and repeated-message hiding with configurable scopes and exact channel lists.

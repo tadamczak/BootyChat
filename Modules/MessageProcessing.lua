@@ -61,6 +61,7 @@ local function Context(frame, values)
     -- Event globals can also be visible to addon diagnostics. Only the exact
     -- native formatted delivery is eligible for policy; unknown wrappers yield.
     if values[2] ~= body then return end
+    if not string.find(raw, "%%", 1, true) then return eventType, sender, channel, raw end
     return eventType, sender, channel, (string.gsub(raw, "%%%%", "%%"))
 end
 function Processing.New(windowCount)

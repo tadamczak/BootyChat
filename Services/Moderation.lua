@@ -107,7 +107,7 @@ end
 function Moderation.New(windowCount)
     if not Integer(windowCount, 1, 32) then return nil, "Invalid chat moderation window count." end
     if not History or type(History.PlainText) ~= "function" then return nil, "Visible chat text service is unavailable." end
-    return setmetatable({windowCount = windowCount, records = {}, count = 0, bytes = 0,
+    return setmetatable({windowCount = windowCount, records = {}, lookup = {}, count = 0, bytes = 0,
         head = 1, active = false}, {__index = Methods})
 end
 local function Equal(a, b)
@@ -116,6 +116,7 @@ local function Equal(a, b)
     return a[1] == b[1] and a[2] == b[2] and a[3] == b[3]
 end
 function Methods:Reset()
+    for key in pairs(self.lookup) do self.lookup[key] = nil end
     for _, record in pairs(self.records) do for key in pairs(record) do record[key] = nil end end
     self.count, self.bytes, self.head, self.lastNow, self.lastAlert = 0, 0, 1, nil, nil
     return true
@@ -184,13 +185,13 @@ local function Match(text, term, whole)
     return false
 end
 local function Index(self, offset) return math.mod(self.head + offset - 1, Moderation.MAX_RECORDS) + 1 end
-local function Find(self, windowId, eventType, sender, channel, text)
+local function Key(windowId, eventType, sender, channel)
     sender, channel = Fold(sender), channel and Fold(Trim(channel)) or ""
-    for offset = self.count - 1, 0, -1 do
-        local record = self.records[Index(self, offset)]
-        if record.windowId == windowId and record.eventType == eventType and record.sender == sender and
-            record.channel == channel and record.text == text then return record end
-    end
+    local window = tostring(windowId)
+    -- Context lengths retain exact boundaries; the bucket uses the original body
+    -- string directly. Empty buckets are released with their last owned record.
+    return string.len(window) .. ":" .. window .. string.len(eventType) .. ":" .. eventType ..
+        string.len(sender) .. ":" .. sender .. string.len(channel) .. ":" .. channel, sender, channel
 end
 function Methods:Evaluate(windowId, eventType, sender, channel, rawBody, now)
     if not self.active then return false, false, nil end
@@ -210,7 +211,8 @@ function Methods:Evaluate(windowId, eventType, sender, channel, rawBody, now)
     if filters and self.filterRepeat then
         normalized = rawBody
         if not self.lastNow or now >= self.lastNow then
-            local record = Find(self, windowId, eventType, sender, channel, normalized)
+            local bucket = self.lookup[Key(windowId, eventType, sender, channel)]
+            local record = bucket and bucket[normalized]
             if record and now >= record.at and now - record.at < preferences.repeatSeconds then return true, false, nil end
         end
     end
@@ -223,23 +225,31 @@ function Methods:Evaluate(windowId, eventType, sender, channel, rawBody, now)
 end
 local function Evict(self)
     local record = self.records[self.head]
+    local bucket = self.lookup[record.key]
+    bucket[record.text] = nil
+    if not next(bucket) then self.lookup[record.key] = nil end
     self.bytes = self.bytes - record.bytes
     for key in pairs(record) do record[key] = nil end
     self.head = math.mod(self.head, Moderation.MAX_RECORDS) + 1
     self.count = self.count - 1
 end
 local function Remember(self, windowId, eventType, sender, channel, text, now)
-    local previous = Find(self, windowId, eventType, sender, channel, text)
+    local key
+    key, sender, channel = Key(windowId, eventType, sender, channel)
+    local bucket = self.lookup[key]
+    local previous = bucket and bucket[text]
     if previous then previous.at = now; return end
-    sender, channel = Fold(sender), channel and Fold(Trim(channel)) or ""
-    local bytes = string.len(text) + string.len(sender) + string.len(channel)
+    local bytes = string.len(text) + string.len(sender) + string.len(channel) + string.len(key)
     while self.count >= Moderation.MAX_RECORDS or self.bytes + bytes > Moderation.MAX_BYTES do Evict(self) end
     local index = Index(self, self.count)
     local record = self.records[index]
     if not record then record = {}; self.records[index] = record end
     record.windowId, record.eventType, record.sender, record.channel, record.text, record.at =
         windowId, eventType, sender, channel, text, now
-    record.bytes = bytes
+    record.bytes, record.key = bytes, key
+    bucket = self.lookup[key]
+    if not bucket then bucket = {}; self.lookup[key] = bucket end
+    bucket[text] = record
     self.count, self.bytes = self.count + 1, self.bytes + bytes
 end
 function Methods:Accept(windowId, eventType, sender, channel, normalizedBody, now, mentioned)

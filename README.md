@@ -127,5 +127,7 @@ enabled again. Retained history is never inserted back into native chat.
 
 Message filters affect native-window display. Loot, system, combat and NPC
 messages are excluded; other addons still receive the original chat events.
+BootyRaider continues receiving loot, roll and soft-reserve messages while chat
+filters or history are active.
 Hidden messages are omitted from BootyChat history and mention alerts. Native
 whisper sounds and flashing tabs remain available even if a whisper is hidden.
