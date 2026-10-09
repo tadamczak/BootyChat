@@ -1,5 +1,12 @@
 # Changelog
 
+## 0.1.0-dev.10 — 2026-10-09
+
+- Fix deferred native settings callbacks and avoid repeated unchanged chat font/layout writes.
+- Keep messages visible by default; explicit native/fading preferences remain available.
+- Add Global and per-window inheritance/copy controls.
+- Add input width, border styles/colors and tab border/position controls.
+
 ## 0.1.0-dev.9 — 2026-10-09
 
 - Open live chat history directly, with project headings, toolbar separators and relevant action icons.

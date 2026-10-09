@@ -21,6 +21,12 @@ local shadowChoices = {{value = "native", text = "Native shadow"}, {value = "cus
 local colorChoices = {{value = "native", text = "Native colors"}, {value = "custom", text = "Custom colors"}}
 local fadeChoices = {{value = "native", text = "Native fading"}, {value = "on", text = "Fade messages"}, {value = "off", text = "Keep messages visible"}}
 local borderChoices = {{value = "inherit", text = "Same as chat window"}, {value = "on", text = "Show gold border"}, {value = "off", text = "Hide gold border"}}
+local inputBorderChoices = {{value = "native", text = "Native border"}, {value = "none", text = "None"},
+    {value = "project", text = "Project border"}, {value = "dialog", text = "Dialog border"},
+    {value = "tooltip", text = "Tooltip border"}}
+local tabBorderChoices = {{value = "inherit", text = "Same as chat window"}, {value = "native", text = "Native border"},
+    {value = "none", text = "None"}, {value = "project", text = "Project border"},
+    {value = "dialog", text = "Dialog border"}, {value = "tooltip", text = "Tooltip border"}}
 local opacityChoices = {{value = -1, text = "Native opacity"}}
 local alphaChoices = {}
 for step = 0, 20 do
@@ -58,7 +64,12 @@ local definitions = {
     {key = "tabFont", label = "Tab font", type = "choice", choices = Inherited(fontChoices), group = "Tabs"},
     {key = "tabFontSize", label = "Tab font size", type = "choice", choices = tabSizes, group = "Tabs"},
     {key = "tabFontOutline", label = "Tab font outline", type = "choice", choices = Inherited(outlineChoices), group = "Tabs"},
-    {key = "tabBorderMode", label = "Tab gold border", type = "choice", choices = borderChoices, group = "Tabs"},
+    {key = "tabBorderMode", label = "Tab gold border", type = "choice", choices = borderChoices, group = "Tabs", profileOnly = true},
+    {key = "tabBorderStyle", label = "Tab border", type = "choice", choices = tabBorderChoices, group = "Tabs"},
+    {key = "tabBorderColor", label = "Tab border color", type = "color", group = "Tabs"},
+    {key = "tabBorderAlpha", label = "Tab border opacity", type = "choice", choices = alphaChoices, group = "Tabs"},
+    {key = "tabOffsetX", label = "Horizontal tab offset", type = "slider", min = -128, max = 128, step = 1, group = "Tabs"},
+    {key = "tabOffsetY", label = "Vertical tab offset", type = "slider", min = -128, max = 128, step = 1, group = "Tabs"},
     {key = "tabColorMode", label = "Tab text colors", type = "choice", choices = colorChoices, group = "Tabs"},
     {key = "tabActiveColor", label = "Active tab color", type = "color", group = "Tabs"},
     {key = "tabInactiveColor", label = "Inactive tab color", type = "color", group = "Tabs"},
@@ -90,10 +101,11 @@ local function AddAppearance(id, definition)
     field.key = id and "window" .. id .. "_" .. key or "default_" .. key
     field.durableKey = id and "windows" or "defaults"
     field.default = Configuration.GetDefault(key)
-    field.path = id and {"Chat", "Windows", Configuration.WindowLabel(id), definition.group} or {"Chat", "Appearance", definition.group}
+    field.path = id and {"Chat", "Windows", Configuration.WindowLabel(id), definition.group} or {"Chat", "Global", definition.group}
     field.windowId = id
     field.get = function(store)
         if id then return Configuration.Resolve(store, id)[key] end
+        if key == "tabBorderStyle" then return Configuration.Resolve(store)[key] end
         return store.defaults[key]
     end
     field.set = function(value)
@@ -101,11 +113,54 @@ local function AddAppearance(id, definition)
     end
     field.profile = not id
     if id then
-        field.tooltip = (field.tooltip and field.tooltip .. "\n\n" or "") .. "This setting overrides the common appearance for native chat window " .. id .. ". Use Reset appearance on the Chat history toolbar to inherit the common appearance again."
+        field.tooltip = (field.tooltip and field.tooltip .. "\n\n" or "") .. "This setting overrides Global for native chat window " .. id .. ". Settings source > Use global settings removes all of this window's overrides. Copy global settings creates an independent copy."
     end
     if key == "width" or key == "height" then
         field.tooltip = (field.tooltip or "") .. " Docked windows share the main window size. An individual size takes effect for a detached window on the next setting change or chat-window update; zero keeps the native size."
     end
+    table.insert(fields, field)
+end
+local function AddWindowSource(id)
+    table.insert(fields, {key = "window" .. id .. "_settingsSource", label = "Settings source", type = "choice",
+        choices = {{value = "global", text = "Use global settings"}, {value = "individual", text = "Use individual settings"},
+            {value = "copy", text = "Copy global settings"}},
+        default = "global", profile = false, durableKey = "windows", windowId = id,
+        path = {"Chat", "Windows", Configuration.WindowLabel(id)},
+        tooltip = "Use global settings follows every Global appearance change and removes this window's overrides. Use individual settings keeps existing overrides or starts with a Global copy. Copy global settings replaces the complete individual appearance with an independent Global copy.",
+        get = function(store) return Configuration.UsesGlobal(store, id) and "global" or "individual" end,
+        set = function(value)
+            if value == "copy" then Required(Runtime.CopyGlobalSettings(id))
+            elseif value == "global" or value == "individual" then Required(Runtime.SetUseGlobalSettings(id, value == "global"))
+            else error("Choose global or individual settings.") end
+        end})
+end
+-- Factory parameters have their own lifetime. Lua 5.0 generic-for variables
+-- are reused and become nil when a lazy Settings callback runs after Build.
+local function AddEditbox(definition)
+    local key, field = definition.key, Field(definition)
+    field.key, field.durableKey = "input_" .. key, "editbox"
+    field.default, field.path = Configuration.GetDefault(key, true), {"Chat", "Input", definition.group}
+    field.get = function(store)
+        if key == "borderStyle" then return Configuration.ResolveEditbox(store)[key] end
+        return store.editbox[key]
+    end
+    field.set = function(value) Required(Runtime.SetEditboxOption(key, NumberValue(definition, value))) end
+    table.insert(fields, field)
+end
+local function AddHistory(definition)
+    local key, field = definition.key, Field(definition)
+    field.key, field.durableKey, field.profile = "history_" .. key, "history", false
+    field.default, field.path = Configuration.GetHistoryDefault(key), {"Chat", "History"}
+    field.get = function(store) return store.history[key] end
+    field.set = function(value) Required(Runtime.SetHistoryOption(key, value)) end
+    table.insert(fields, field)
+end
+local function AddModeration(definition)
+    local key, field = definition.key, Field(definition)
+    field.key, field.durableKey, field.profile = "moderation_" .. key, "moderation", false
+    field.default, field.path = Configuration.GetModerationDefault(key), {"Chat", definition.group}
+    field.get = function(store) return store.moderation[key] end
+    field.set = function(value) Required(Runtime.SetModerationOption(key, value)) end
     table.insert(fields, field)
 end
 local function Build()
@@ -117,13 +172,17 @@ local function Build()
         path = {"Chat", "General"}, set = function(value) Required(Runtime.SetMinimapHidden(value)) end}}
     for _, definition in ipairs(definitions) do AddAppearance(nil, definition) end
     count = Configuration.WindowCount()
-    for id = 1, count do for _, definition in ipairs(definitions) do AddAppearance(id, definition) end end
+    for id = 1, count do
+        AddWindowSource(id)
+        for _, definition in ipairs(definitions) do AddAppearance(id, definition) end
+    end
     table.insert(fields, {key = "windowOverrides", type = "text", profileOnly = true, durableKey = "windows", default = {},
         get = function(store) return store.windows end,
         set = function(value) Required(Runtime.SetWindowOverrides(value)) end})
     local editboxDefinitions = {
         {key = "position", label = "Input position", type = "choice", choices = {
             {value = "native", text = "Native position"}, {value = "top", text = "Above main chat"}, {value = "bottom", text = "Below main chat"}}, group = "Behavior"},
+        {key = "width", label = "Input width (0 keeps native width)", type = "number", min = 0, max = 4096, group = "Behavior"},
         {key = "height", label = "Minimum input height (0 keeps native height)", type = "number", min = 0, max = 64, group = "Behavior",
             tooltip = "An explicit height keeps at least eight pixels of room beyond the selected font size. Zero keeps the native height."},
         {key = "gap", label = "Distance from main chat", type = "slider", min = 0, max = 32, step = 1, group = "Behavior"},
@@ -138,17 +197,13 @@ local function Build()
         {key = "shadowY", label = "Vertical input shadow offset", type = "number", min = -8, max = 8, group = "Text shadow"},
         {key = "backgroundColor", label = "Input background color", type = "color", group = "Background"},
         {key = "backgroundAlpha", label = "Input background opacity", type = "choice", choices = opacityChoices, group = "Background",
-            tooltip = "Native opacity restores the original input artwork when the project gold border is off. With the project border on, Native opacity gives the custom surface a transparent fill."},
-        {key = "goldBorder", label = "Input project gold border", type = "checkbox", group = "Background"},
+            tooltip = "Native border and Native opacity restore the original input artwork. Custom background opacity replaces that artwork; choose Project, Dialog or Tooltip for an independent border."},
+        {key = "goldBorder", label = "Input project gold border", type = "checkbox", group = "Background", profileOnly = true},
+        {key = "borderStyle", label = "Input border", type = "choice", choices = inputBorderChoices, group = "Background"},
+        {key = "borderColor", label = "Input border color", type = "color", group = "Background"},
+        {key = "borderAlpha", label = "Input border opacity", type = "choice", choices = alphaChoices, group = "Background"},
     }
-    for _, definition in ipairs(editboxDefinitions) do
-        local key, field = definition.key, Field(definition)
-        field.key, field.durableKey = "input_" .. key, "editbox"
-        field.default, field.path = Configuration.GetDefault(key, true), {"Chat", "Input", definition.group}
-        field.get = function(store) return store.editbox[key] end
-        field.set = function(value) Required(Runtime.SetEditboxOption(key, NumberValue(definition, value))) end
-        table.insert(fields, field)
-    end
+    for _, definition in ipairs(editboxDefinitions) do AddEditbox(definition) end
     local historyDefinitions = {
         {key = "enabled", label = "Collect chat history", type = "checkbox",
             tooltip = "Collect messages submitted to native chat windows. Pausing collection keeps existing session history."},
@@ -159,14 +214,7 @@ local function Build()
             {value = 1000, text = "1000"}, {value = 2000, text = "2000"}},
             tooltip = "A global limit across all native windows, also bounded to 256 KiB of message text. Lowering the limit removes the oldest entries."},
     }
-    for _, definition in ipairs(historyDefinitions) do
-        local key, field = definition.key, Field(definition)
-        field.key, field.durableKey, field.profile = "history_" .. key, "history", false
-        field.default, field.path = Configuration.GetHistoryDefault(key), {"Chat", "History"}
-        field.get = function(store) return store.history[key] end
-        field.set = function(value) Required(Runtime.SetHistoryOption(key, value)) end
-        table.insert(fields, field)
-    end
+    for _, definition in ipairs(historyDefinitions) do AddHistory(definition) end
     local scopeChoices = {{value = "channels", text = "Named channels"}, {value = "public", text = "Channels, Say and Yell"},
         {value = "group", text = "Guild, party, raid and battleground"}, {value = "all", text = "All player messages"}}
     local scopeHelp = "Only messages displayed in native chat windows are processed. Loot, system, NPC and combat messages are excluded. Other addons still receive the original events. Native whisper sounds and tab flashing remain active."
@@ -192,14 +240,7 @@ local function Build()
         {key = "alertCooldown", label = "Minimum time between mention sounds", type = "slider", min = 1, max = 60, step = 1,
             tooltip = "A shared cooldown prevents repeated sounds when the same message appears in several windows.", group = "Mentions"},
     }
-    for _, definition in ipairs(moderationDefinitions) do
-        local key, field = definition.key, Field(definition)
-        field.key, field.durableKey, field.profile = "moderation_" .. key, "moderation", false
-        field.default, field.path = Configuration.GetModerationDefault(key), {"Chat", definition.group}
-        field.get = function(store) return store.moderation[key] end
-        field.set = function(value) Required(Runtime.SetModerationOption(key, value)) end
-        table.insert(fields, field)
-    end
+    for _, definition in ipairs(moderationDefinitions) do AddModeration(definition) end
 end
 function Chat.GetSettings()
     local store = Chat.Database.Ensure()

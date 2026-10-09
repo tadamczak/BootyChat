@@ -276,6 +276,12 @@ function Runtime.SetOption(id, key, value)
         target = store.windows[id]
         if not target then target = {}; store.windows[id] = target end
     end
+    if key == "tabBorderMode" then
+        local appearance = Configuration.Copy(target)
+        appearance[key], appearance.tabBorderStyle = value, nil
+        if id then return Commit(store, store.windows, id, appearance) end
+        return Commit(store, store, "defaults", appearance)
+    end
     return Commit(store, target, key, value)
 end
 function Runtime.SetEditboxOption(key, value)
@@ -283,6 +289,13 @@ function Runtime.SetEditboxOption(key, value)
     if not valid then return false, failure end
     local store, reason = Chat.Database.Ensure()
     if not store then return false, reason end
+    if key == "goldBorder" then
+        -- Legacy profiles have only this switch. Clearing the newer style
+        -- preserves their appearance; newer profiles write their style later.
+        local appearance = Configuration.Copy(store.editbox)
+        appearance[key], appearance.borderStyle = value, nil
+        return Commit(store, store, "editbox", appearance)
+    end
     return Commit(store, store.editbox, key, value)
 end
 function Runtime.SetEnabled(value)
@@ -305,6 +318,21 @@ function Runtime.ResetWindow(id)
     local store, failure = Chat.Database.Ensure()
     if not store then return false, failure end
     return Commit(store, store.windows, id, nil)
+end
+function Runtime.CopyGlobalSettings(id)
+    if not Configuration.ValidWindow(id) then return false, "Choose a native chat window." end
+    local store, failure = Chat.Database.Ensure()
+    if not store then return false, failure end
+    return Commit(store, store.windows, id, Configuration.Resolve(store))
+end
+function Runtime.SetUseGlobalSettings(id, value)
+    if type(value) ~= "boolean" then return false, "Choose global or individual settings." end
+    if value then return Runtime.ResetWindow(id) end
+    if not Configuration.ValidWindow(id) then return false, "Choose a native chat window." end
+    local store, failure = Chat.Database.Ensure()
+    if not store then return false, failure end
+    if not Configuration.UsesGlobal(store, id) then return true end
+    return Runtime.CopyGlobalSettings(id)
 end
 function Runtime.SetWindowOverrides(value)
     local valid, failure = Configuration.ValidateWindows(value)

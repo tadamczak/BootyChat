@@ -15,14 +15,14 @@ scrolling and the shared input box.
 
 ## Features
 
-- Common appearance with individual native-window overrides.
+- Global appearance with individual native-window overrides and independent copies.
 - Font family, size, outline, shadow color and offset, and line spacing.
 - Message fading, visibility time and fade duration.
 - Background color, opacity and margins; Booty gold borders with adjustable opacity.
-- Separate tab fonts, shadows, active/inactive caption colors and gold borders.
+- Separate tab fonts, shadows, active/inactive caption colors, border styles/colors and position offsets.
 - Mouse-wheel speed, Shift-wheel to the top or bottom, optional scroll-button hiding.
-- Native window-size overrides and input position, minimum height, gap and arrow-key behavior.
-- Input fonts, shadows, background color and opacity, and project gold border.
+- Native window-size overrides and input position, width, minimum height, gap and arrow-key behavior.
+- Input fonts, shadows, background color and opacity, and native/project/dialog/tooltip borders.
 - Shared appearance profiles including individual window overrides.
 - Standalone configuration or the shared Booty Suite dashboard and settings.
 - Native tabs, channels, filters, docking, menus and item links remain available.
@@ -50,9 +50,12 @@ BootyChat again. These commands preserve your channels and messages.
 
 Right-click a native chat tab to create, rename or filter tabs. Use the native
 Unlock option, tab dragging and resize handle to position your windows.
-Settings window numbers follow native chat slots. Common appearance applies
-until you change an individual window setting; Reset appearance on the history
-toolbar lets you choose a window and restore its common appearance.
+Settings window numbers follow native chat slots. Chat > Global applies to all
+windows until you change an individual setting. Each window's Settings source
+offers Use global settings, Use individual settings and Copy global settings.
+Use global settings removes that window's overrides and follows future Global
+changes. Copy global settings creates a complete independent copy. Reset
+appearance on the history toolbar also restores Global for the chosen window.
 Set width or height to zero to keep the native size. Docked windows share the
 main window size. After detaching a window, its saved individual size applies
 on the next setting change or native chat-window update.
@@ -60,11 +63,18 @@ on the next setting change or native chat-window update.
 Settings groups separate text, shadows, fading, backgrounds, scrolling, layout
 and tabs. Native choices restore the corresponding WoW setting; tab inheritance
 uses the chat text settings. Background margins extend the decorative surface.
+Messages stay visible by default. Chat > Global > Fading lets you choose Native
+or Fade messages when you want older lines to disappear; explicit saved choices
+remain unchanged.
 Input appearance keeps the native destination label, channel colors and typing
-behavior. An explicit minimum input height also leaves room for its font.
+behavior. An explicit minimum input height also leaves room for its font;
+width zero keeps the native width. Input and tab borders offer Native, None,
+Project, Dialog and Tooltip, with separate color and opacity. Tab borders can
+also inherit the window border. Horizontal and vertical tab offsets move the
+tabs relative to their native dock positions.
 Native chat background opacity keeps the original background. For the input,
-native opacity restores the original artwork when its project gold border is
-off; with that border on, it selects a transparent custom fill.
+native opacity restores the original artwork with Native border; custom borders
+use a transparent fill until an explicit background opacity is selected.
 
 Use the shared Profile page to add, save, load, delete or export an appearance
 profile. Profiles include the common appearance, input options and individual

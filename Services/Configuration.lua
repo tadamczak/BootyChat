@@ -7,16 +7,19 @@ local defaults = {
     goldBorder = true, wheel = true, wheelSpeed = 3, shiftScroll = true,
     hideButtons = false, width = 0, height = 0,
     shadowMode = "native", shadowColor = {0, 0, 0}, shadowAlpha = 1, shadowX = 1, shadowY = -1,
-    fadingMode = "native", timeVisible = 0, fadeDuration = 0, lineSpacing = -1,
+    fadingMode = "off", timeVisible = 0, fadeDuration = 0, lineSpacing = -1,
     backgroundPaddingX = 4, backgroundPaddingY = 4, borderAlpha = 1,
     tabFont = "inherit", tabFontSize = -1, tabFontOutline = "inherit", tabBorderMode = "inherit",
+    tabBorderStyle = "legacy", tabBorderColor = {1, 0.78, 0.2}, tabBorderAlpha = 1,
+    tabOffsetX = 0, tabOffsetY = 0,
     tabColorMode = "native", tabActiveColor = {1, 0.82, 0}, tabInactiveColor = {0.7, 0.7, 0.7},
     tabShadowMode = "native", tabShadowColor = {0, 0, 0}, tabShadowAlpha = 1, tabShadowX = 1, tabShadowY = -1,
 }
 local editboxDefaults = {position = "bottom", fontSize = 14, arrowKeys = true,
-    font = "native", fontOutline = "native", height = 0, gap = 2,
+    font = "native", fontOutline = "native", width = 0, height = 0, gap = 2,
     shadowMode = "native", shadowColor = {0, 0, 0}, shadowAlpha = 1, shadowX = 1, shadowY = -1,
-    backgroundColor = {0.02, 0.02, 0.02}, backgroundAlpha = -1, goldBorder = false}
+    backgroundColor = {0.02, 0.02, 0.02}, backgroundAlpha = -1, goldBorder = false,
+    borderStyle = "legacy", borderColor = {1, 0.78, 0.2}, borderAlpha = 1}
 local historyDefaults = {enabled = true, persist = false, limit = 500}
 local Moderation = BootyChat.Services.Moderation
 local fonts = {native = true, friz = true, arial = true, morpheus = true, skurri = true}
@@ -25,6 +28,7 @@ local positions = {native = true, top = true, bottom = true}
 local shadowModes = {native = true, custom = true}
 local fadingModes = {native = true, on = true, off = true}
 local borderModes = {inherit = true, on = true, off = true}
+local borderStyles = {legacy = true, native = true, none = true, project = true, dialog = true, tooltip = true}
 
 local function Finite(value)
     return type(value) == "number" and value == value and value - value == 0
@@ -71,13 +75,17 @@ function Configuration.ValidateValue(key, value, editbox)
         valid = type(value) == "string" and shadowModes[value]
     elseif key == "fadingMode" then valid = type(value) == "string" and fadingModes[value]
     elseif key == "tabBorderMode" then valid = type(value) == "string" and borderModes[value]
+    elseif key == "borderStyle" or key == "tabBorderStyle" then
+        valid = type(value) == "string" and (borderStyles[value] or key == "tabBorderStyle" and value == "inherit")
     elseif key == "backgroundAlpha" then valid = Finite(value) and (value == -1 or value >= 0 and value <= 1)
-    elseif key == "shadowAlpha" or key == "tabShadowAlpha" or key == "borderAlpha" then
+    elseif key == "shadowAlpha" or key == "tabShadowAlpha" or key == "borderAlpha" or key == "tabBorderAlpha" then
         valid = Finite(value) and value >= 0 and value <= 1
     elseif key == "shadowX" or key == "shadowY" or key == "tabShadowX" or key == "tabShadowY" then
         valid = Finite(value) and value >= -8 and value <= 8
     elseif key == "backgroundPaddingX" or key == "backgroundPaddingY" then
         valid = Finite(value) and value >= 0 and value <= 24
+    elseif key == "tabOffsetX" or key == "tabOffsetY" then
+        valid = Finite(value) and value >= -128 and value <= 128
     elseif key == "gap" then valid = Finite(value) and value >= 0 and value <= 32
     elseif key == "timeVisible" then valid = Integer(value, 0, 3600)
     elseif key == "fadeDuration" then valid = value == 0 or Finite(value) and value >= 0.1 and value <= 30
@@ -167,7 +175,20 @@ function Configuration.Resolve(store, id)
         if override and override[key] ~= nil then value = override[key] end
         result[key] = Configuration.Copy(value)
     end
+    -- Keep old sparse window overrides authoritative until the user chooses a
+    -- new style. No saved table or raw profile preference is rewritten here.
+    local source = override and (override.tabBorderStyle ~= nil or override.tabBorderMode ~= nil) and override or store.defaults
+    local style = source and source.tabBorderStyle
+    if not style or style == "legacy" then
+        local mode = source and source.tabBorderMode or result.tabBorderMode
+        style = mode == "on" and "project" or mode == "off" and "none" or "inherit"
+    end
+    result.tabBorderStyle = style
     return result
+end
+function Configuration.UsesGlobal(store, id)
+    local override = store.windows and store.windows[id]
+    return override == nil or next(override) == nil
 end
 function Configuration.ResolveEditbox(store)
     local result = {}
@@ -175,6 +196,7 @@ function Configuration.ResolveEditbox(store)
         if store.editbox and store.editbox[key] ~= nil then value = store.editbox[key] end
         result[key] = Configuration.Copy(value)
     end
+    if result.borderStyle == "legacy" then result.borderStyle = result.goldBorder and "project" or "native" end
     return result
 end
 function Configuration.ResolveHistory(store)
