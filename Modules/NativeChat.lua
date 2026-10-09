@@ -8,7 +8,7 @@ local Configuration = Chat.Services.Configuration
 local UI = (Chat.UI or BootyLib.UI).Components
 local records, editRecord = {}, nil
 local state = {active = false, restorationBlocked = false, windows = 0, foreignChanges = 0, deferredWheels = 0}
-local store, failureObserver
+local store, failureObserver, tabResizeLease
 local competingOwners = {"pfUI", "Prat", "Chatter"}
 local fonts = {friz = "Fonts\\FRIZQT__.TTF", arial = "Fonts\\ARIALN.TTF",
     morpheus = "Fonts\\MORPHEUS.TTF", skurri = "Fonts\\SKURRI.TTF"}
@@ -23,6 +23,11 @@ local standardBorders = {
     none = {bgFile = "Interface\\Buttons\\WHITE8X8", tile = true, tileSize = 8},
 }
 local tabTextureNames = {"Left", "Middle", "Right", "LeftDisabled", "MiddleDisabled", "RightDisabled", "HighlightTexture"}
+local tabBackgrounds={
+    color={bgFile="Interface\\Buttons\\WHITE8X8",tile=true,tileSize=16},
+    dialog={bgFile="Interface\\DialogFrame\\UI-DialogBox-Background",tile=true,tileSize=16},
+    tooltip={bgFile="Interface\\Tooltips\\UI-Tooltip-Background",tile=true,tileSize=16},
+}
 
 local function Global(name) return type(getglobal) == "function" and getglobal(name) or _G[name] end
 local function Enabled(value) return value ~= nil and value ~= false and value ~= 0 end
@@ -398,8 +403,8 @@ local function Appearance(record, options)
             record.surfaceReady = true
         end
         Must(record.surface.ClearAllPoints, record.surface)
-        Must(record.surface.SetPoint, record.surface, "TOPLEFT", record.frame, "TOPLEFT", -options.backgroundPaddingX, options.backgroundPaddingY)
-        Must(record.surface.SetPoint, record.surface, "BOTTOMRIGHT", record.frame, "BOTTOMRIGHT", options.backgroundPaddingX, -options.backgroundPaddingY)
+        Must(record.surface.SetPoint, record.surface, "TOPLEFT", record.frame, "TOPLEFT", -options.backgroundMarginLeft, options.backgroundMarginTop)
+        Must(record.surface.SetPoint, record.surface, "BOTTOMRIGHT", record.frame, "BOTTOMRIGHT", options.backgroundMarginRight, -options.backgroundMarginBottom)
         UI.Window.ApplyProjectSurface(record.surface)
         local color = options.backgroundColor
         Must(record.surface.SetBackdropColor, record.surface, color[1], color[2], color[3], math.max(0, options.backgroundAlpha))
@@ -424,13 +429,13 @@ local function WriteTabGeometry(layout, value)
     if value == layout.desired then
         -- Reuse Blizzard's tab geometry owner (1.12 UIPanelTemplates.lua).
         -- An absolute measured width avoids stale/clipped GetWidth captions.
-        return PanelTemplates_TabResize(10, layout.parts.tab, value.tab)
+        return (tabResizeLease and tabResizeLease.original or PanelTemplates_TabResize)(10, layout.parts.tab, value.tab)
     end
     for key, region in pairs(layout.parts) do
         if region:SetWidth(value[key]) == false then return false end
     end
 end
-local function FitTab(record, tab, label)
+local function FitTab(record, tab, label, options)
     Require(label, {"GetStringWidth", "GetWidth", "SetWidth"}, record.name .. "TabText")
     local left = Global(record.name .. "TabLeft")
     if not left or type(left.GetWidth) ~= "function" or type(PanelTemplates_TabResize) ~= "function" then
@@ -447,13 +452,49 @@ local function FitTab(record, tab, label)
     end
     local layout = record.tabLayout.frame
     local middle = math.max(1, label:GetStringWidth() + 10)
-    local width = middle + 2 * left:GetWidth()
+    local width = options.tabWidth > 0 and math.max(options.tabWidth,2*left:GetWidth()+1) or middle + 2 * left:GetWidth()
+    middle=width-2*left:GetWidth()
     local desired = {tab = width, text = middle}
     for key in pairs(layout.parts) do
         if key ~= "tab" and key ~= "text" then desired[key] = key == "highlight" and width or middle end
     end
     layout.desired = desired
-    Property(record.tabLayout, "geometry", ReadTabGeometry, WriteTabGeometry, desired)
+    return Property(record.tabLayout, "geometry", ReadTabGeometry, WriteTabGeometry, desired)
+end
+local function InstallTabResize()
+    if tabResizeLease then
+        if PanelTemplates_TabResize~=tabResizeLease.guard then error("Native tab resize has another owner.") end
+        return
+    end
+    Require(_G,{"PanelTemplates_TabResize"},"Native tab resize")
+    local lease={original=PanelTemplates_TabResize}
+    lease.guard=function(padding,tab,absoluteSize,maxWidth)
+        local record
+        if state.active and not lease.applying then
+            for _,candidate in pairs(records) do if candidate.tab==(tab or this) then record=candidate;break end end
+        end
+        if not record then return lease.original(padding,tab,absoluteSize,maxWidth) end
+        local geometry=record.tabLayout and record.tabLayout.leases.geometry
+        if geometry and not PropertyEqual("geometry",ReadTabGeometry(record.tabLayout.frame),geometry.applied) then
+            return ReportFailure(record.name.." tab geometry has another owner.")
+        end
+        local ok,result=Call(lease.original,padding,tab,absoluteSize,maxWidth)
+        if geometry then
+            local actual=ReadTabGeometry(record.tabLayout.frame)
+            geometry.original,geometry.applied=actual,actual
+        end
+        if not ok or result==false then return ReportFailure(ok and "Native tab resize was declined." or result) end
+        -- Only a completed native resize may replace the restoration target.
+        -- Direct foreign geometry writes still fail the ownership check.
+        if record.tabOptions and (not Enabled(record.frame.isDocked) or record.tabOptions.tabWidth>0 and not absoluteSize) then
+            lease.applying=true
+            local fitted,reason=Call(FitTab,record,record.tab,record.tabText.frame,record.tabOptions)
+            lease.applying=false
+            if not fitted then return ReportFailure(reason) end
+        end
+        return result
+    end
+    PanelTemplates_TabResize=lease.guard;tabResizeLease=lease
 end
 local function RefreshTabColor(record)
     local lease = record.tabColor
@@ -726,6 +767,19 @@ local function TabAppearance(record, tab, options)
         Must(surface.SetBackdropBorderColor, surface, color[1], color[2], color[3], options.tabBorderAlpha or 1)
         Must(surface.Show, surface)
     elseif record.tabSurface then Must(record.tabSurface.Hide, record.tabSurface) end
+    if options.tabBackground~="native" then
+        if not record.tabBackground then
+            record.tabBackground=UI.CreateContainer(nil,tab)
+            Must(record.tabBackground.EnableMouse,record.tabBackground,false)
+        end
+        local surface=record.tabBackground
+        Must(surface.SetAllPoints,surface,tab)
+        Must(surface.SetFrameLevel,surface,math.max(0,tab:GetFrameLevel()-1))
+        Must(surface.SetBackdrop,surface,tabBackgrounds[options.tabBackground])
+        local color=options.tabBackgroundColor
+        Must(surface.SetBackdropColor,surface,color[1],color[2],color[3],options.tabBackgroundAlpha)
+        Must(surface.Show,surface)
+    elseif record.tabBackground then Must(record.tabBackground.Hide,record.tabBackground) end
     for _, suffix in ipairs(tabTextureNames) do
         local name = "Tab" .. suffix
         if style ~= "native" then Texture(record, name, true)
@@ -739,6 +793,12 @@ local function ApplyWindow(record, options)
     if tab then
         if record.tab and record.tab ~= tab then error(record.name .. " tab was replaced.") end
         record.tab = tab
+        record.tabOptions=options
+        if not record.tabRecord then
+            Require(tab,{"GetHeight","SetHeight"},record.name.."Tab")
+            record.tabRecord={frame=tab,name=record.name.."Tab",leases={},textures={},buttons={}}
+        end
+        Property(record.tabRecord,"height",ReadHeight,SetHeight,options.tabHeight>0 and options.tabHeight or nil)
         local label = Global(record.name .. "TabText") or type(tab.GetFontString) == "function" and tab:GetFontString()
         if label then
             if not record.tabText then record.tabText = NewRecord(label, record.name .. "TabText", true) end
@@ -753,16 +813,19 @@ local function ApplyWindow(record, options)
             Shadow(record.tabText, options.tabShadowMode, options.tabShadowColor, options.tabShadowAlpha, options.tabShadowX, options.tabShadowY)
             TabColor(record, label, options)
             local docked = Enabled(record.frame.isDocked)
-            if docked then
+            if docked and options.tabWidth==0 then
                 -- Native FCF_DockUpdate fits and caps docked tabs on every
                 -- selection/resize. Preserve that single geometry owner.
                 if fontChanged then state.dockChanged = true end
                 if record.tabLayout then
-                    local restored, reason = ReleaseProperty(record.tabLayout, "geometry")
+                    local restored, reason, changed = ReleaseProperty(record.tabLayout, "geometry")
                     if not restored then error(reason) end
+                    if changed then state.dockChanged=true end
                 end
-            elseif fontChanged or record.tabTitle ~= label:GetText() or record.tabDocked ~= docked or
-                not record.tabLayout or not record.tabLayout.leases.geometry then FitTab(record, tab, label) end
+            else
+                local resized=FitTab(record, tab, label,options)
+                if docked and resized then state.dockChanged=true end
+            end
             record.tabDocked = docked
             record.tabTitle = label:GetText()
         end
@@ -1024,6 +1087,8 @@ local function Release(record)
         local ok, reason = HideSurface(record.tabSurface)
         if not ok then failure = failure or reason end
     end
+    if record.tabBackground then local ok,reason=HideSurface(record.tabBackground);if not ok then failure=failure or reason end end
+    if record.tabRecord then local ok,reason=Attempt(Release,record.tabRecord);if not ok then failure=failure or reason end end
     if record.tabText then local ok, reason = Attempt(Release, record.tabText); if not ok then failure = failure or reason end end
     if record.tabLayout then local ok, reason = Attempt(Release, record.tabLayout); if not ok then failure = failure or reason end end
     if record.header then local ok, reason = Attempt(Release, record.header); if not ok then failure = failure or reason end end
@@ -1036,6 +1101,10 @@ function Native.Stop()
     for _, record in pairs(records) do Disable(record); record.wheelDeferred = nil end
     if editRecord then Disable(editRecord) end
     local failure
+    if tabResizeLease then
+        local ok,reason=ReleaseSlot(_G,"PanelTemplates_TabResize",tabResizeLease.original,tabResizeLease.guard)
+        if ok then tabResizeLease=nil else failure=reason end
+    end
     for _, record in pairs(records) do
         local ran, ok, reason = Call(Release, record)
         if not ran or not ok then failure = failure or tostring(ran and reason or ok) end
@@ -1067,6 +1136,7 @@ local function Apply(value, refresh)
     local ran, failure = Call(function()
         local owner = CompetingOwner()
         if owner then error(owner) end
+        InstallTabResize()
         if refresh then
             for id, record in pairs(records) do
                 local lease = record.leases.font
@@ -1089,11 +1159,6 @@ local function Apply(value, refresh)
                         local current = geometry.read(record.frame)
                         if not PropertyEqual(key, current, geometry.applied) then geometry.original, geometry.applied = current, current end
                     end
-                end
-                if record.tabLayout and record.tabLayout.leases.geometry then
-                    local geometry = record.tabLayout.leases.geometry
-                    local current = ReadTabGeometry(record.tabLayout.frame)
-                    if not PropertyEqual("geometry", current, geometry.applied) then geometry.original, geometry.applied = current, current end
                 end
             end
         end

@@ -1,5 +1,11 @@
 # Changelog
 
+## 0.1.0-dev.11 — 2026-10-10
+
+- Cooperate with native tab renaming and docking geometry while retaining foreign-owner diagnostics.
+- Add tab width/height, colored or textured backgrounds and independent four-side chat margins.
+- Use dimension sliders and numeric percentages; extend input distance to -512–512 and preserve old profiles.
+
 ## 0.1.0-dev.10 — 2026-10-09
 
 - Fix deferred native settings callbacks and avoid repeated unchanged chat font/layout writes.

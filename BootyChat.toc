@@ -2,7 +2,7 @@
 ## Title: BootyChat
 ## Notes: Native chat appearance, history, optional message filters and mentions. Standalone or integrated into Booty Suite.
 ## Author: Mukla
-## Version: 0.1.0-dev.10
+## Version: 0.1.0-dev.11
 ## Dependencies: BootyLib
 ## SavedVariables: BootyChatDB
 

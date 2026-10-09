@@ -11,7 +11,9 @@ local defaults = {
     backgroundPaddingX = 4, backgroundPaddingY = 4, borderAlpha = 1,
     tabFont = "inherit", tabFontSize = -1, tabFontOutline = "inherit", tabBorderMode = "inherit",
     tabBorderStyle = "legacy", tabBorderColor = {1, 0.78, 0.2}, tabBorderAlpha = 1,
-    tabOffsetX = 0, tabOffsetY = 0,
+    tabOffsetX = 0, tabOffsetY = 0, tabWidth = 0, tabHeight = 0,
+    tabBackground = "native", tabBackgroundColor = {0.02,0.02,0.02}, tabBackgroundAlpha = 0.65,
+    backgroundMarginTop = -1, backgroundMarginBottom = -1, backgroundMarginLeft = -1, backgroundMarginRight = -1,
     tabColorMode = "native", tabActiveColor = {1, 0.82, 0}, tabInactiveColor = {0.7, 0.7, 0.7},
     tabShadowMode = "native", tabShadowColor = {0, 0, 0}, tabShadowAlpha = 1, tabShadowX = 1, tabShadowY = -1,
 }
@@ -86,7 +88,12 @@ function Configuration.ValidateValue(key, value, editbox)
         valid = Finite(value) and value >= 0 and value <= 24
     elseif key == "tabOffsetX" or key == "tabOffsetY" then
         valid = Finite(value) and value >= -128 and value <= 128
-    elseif key == "gap" then valid = Finite(value) and value >= 0 and value <= 32
+    elseif key == "tabWidth" then valid = value == 0 or Integer(value, 0, 512)
+    elseif key == "tabHeight" then valid = value == 0 or Integer(value, 0, 128)
+    elseif key == "tabBackground" then valid = value == "native" or value == "color" or value == "tooltip" or value == "dialog"
+    elseif string.find(key,"^backgroundMargin") then valid = value == -1 or Integer(value,0,256)
+    elseif key == "tabBackgroundAlpha" then valid = Finite(value) and value >= 0 and value <= 1
+    elseif key == "gap" then valid = Finite(value) and value >= -512 and value <= 512
     elseif key == "timeVisible" then valid = Integer(value, 0, 3600)
     elseif key == "fadeDuration" then valid = value == 0 or Finite(value) and value >= 0.1 and value <= 30
     elseif key == "lineSpacing" then valid = value == -1 or Finite(value) and value >= 0 and value <= 12
@@ -99,8 +106,8 @@ function Configuration.ValidateValue(key, value, editbox)
             for index in pairs(value) do if index ~= 1 and index ~= 2 and index ~= 3 then valid = false end end
         end
     elseif key == "wheelSpeed" then valid = Integer(value, 1, 10)
-    elseif key == "width" then valid = value == 0 or Integer(value, 100, 4096)
-    elseif key == "height" then valid = value == 0 or (editbox and Integer(value, 16, 64) or not editbox and Integer(value, 50, 4096))
+    elseif key == "width" then valid = value == 0 or Integer(value, 0, 4096)
+    elseif key == "height" then valid = value == 0 or (editbox and Integer(value, 0, 64) or not editbox and Integer(value, 0, 4096))
     else valid = type(value) == "boolean" end
     if not valid then return false, "Invalid chat setting: " .. tostring(key) end
     return true
@@ -182,6 +189,10 @@ function Configuration.Resolve(store, id)
     if not style or style == "legacy" then
         local mode = source and source.tabBorderMode or result.tabBorderMode
         style = mode == "on" and "project" or mode == "off" and "none" or "inherit"
+    end
+    for _,side in ipairs({"Top","Bottom","Left","Right"}) do
+        local key="backgroundMargin"..side
+        if result[key]==-1 then result[key]=(side=="Left" or side=="Right") and result.backgroundPaddingX or result.backgroundPaddingY end
     end
     result.tabBorderStyle = style
     return result

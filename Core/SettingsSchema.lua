@@ -27,12 +27,6 @@ local inputBorderChoices = {{value = "native", text = "Native border"}, {value =
 local tabBorderChoices = {{value = "inherit", text = "Same as chat window"}, {value = "native", text = "Native border"},
     {value = "none", text = "None"}, {value = "project", text = "Project border"},
     {value = "dialog", text = "Dialog border"}, {value = "tooltip", text = "Tooltip border"}}
-local opacityChoices = {{value = -1, text = "Native opacity"}}
-local alphaChoices = {}
-for step = 0, 20 do
-    local choice = {value = step / 20, text = step * 5 .. "%"}
-    table.insert(opacityChoices, choice); table.insert(alphaChoices, choice)
-end
 local spacingChoices = {{value = -1, text = "Native spacing"}}
 for step = 0, 24 do table.insert(spacingChoices, {value = step / 2, text = tostring(step / 2)}) end
 local definitions = {
@@ -42,40 +36,49 @@ local definitions = {
     {key = "lineSpacing", label = "Line spacing", type = "choice", choices = spacingChoices, group = "Text"},
     {key = "shadowMode", label = "Text shadow", type = "choice", choices = shadowChoices, group = "Text shadow"},
     {key = "shadowColor", label = "Shadow color", type = "color", group = "Text shadow"},
-    {key = "shadowAlpha", label = "Shadow opacity", type = "choice", choices = alphaChoices, group = "Text shadow"},
+    {key = "shadowAlpha", label = "Shadow opacity (%)", type = "number", displayScale = 100, min = 0, max = 100, group = "Text shadow"},
     {key = "shadowX", label = "Horizontal shadow offset", type = "number", min = -8, max = 8, group = "Text shadow"},
     {key = "shadowY", label = "Vertical shadow offset", type = "number", min = -8, max = 8, group = "Text shadow"},
     {key = "fadingMode", label = "Message fading", type = "choice", choices = fadeChoices, group = "Fading"},
     {key = "timeVisible", label = "Seconds before fading (0 keeps native time)", type = "number", min = 0, max = 3600, group = "Fading"},
     {key = "fadeDuration", label = "Fade duration (0 keeps native duration)", type = "number", min = 0, max = 30, group = "Fading"},
     {key = "backgroundColor", label = "Background color", type = "color", group = "Background"},
-    {key = "backgroundAlpha", label = "Background opacity", type = "choice", choices = opacityChoices, group = "Background",
-        tooltip = "Native opacity keeps the native chat background and gives the project surface a transparent fill."},
-    {key = "backgroundPaddingX", label = "Horizontal background margin", type = "slider", min = 0, max = 24, step = 1, group = "Background"},
-    {key = "backgroundPaddingY", label = "Vertical background margin", type = "slider", min = 0, max = 24, step = 1, group = "Background"},
+    {key = "backgroundAlpha", label = "Background opacity (%)", type = "number", displayScale = 100, min = -100, max = 100, group = "Background",
+        tooltip = "-100 keeps the native chat background and gives the project surface a transparent fill."},
+    {key = "backgroundPaddingX", label = "Legacy horizontal background margin", type = "slider", min = 0, max = 24, step = 1, group = "Background", profileOnly = true},
+    {key = "backgroundPaddingY", label = "Legacy vertical background margin", type = "slider", min = 0, max = 24, step = 1, group = "Background"},
+    {key = "backgroundMarginTop", label = "Top background margin", type = "slider", min = 0, max = 256, step = 1, group = "Background"},
+    {key = "backgroundMarginBottom", label = "Bottom background margin", type = "slider", min = 0, max = 256, step = 1, group = "Background"},
+    {key = "backgroundMarginLeft", label = "Left background margin", type = "slider", min = 0, max = 256, step = 1, group = "Background"},
+    {key = "backgroundMarginRight", label = "Right background margin", type = "slider", min = 0, max = 256, step = 1, group = "Background"},
     {key = "goldBorder", label = "Project gold border", type = "checkbox", group = "Background"},
-    {key = "borderAlpha", label = "Gold border opacity", type = "choice", choices = alphaChoices, group = "Background"},
+    {key = "borderAlpha", label = "Gold border opacity (%)", type = "number", displayScale = 100, min = 0, max = 100, group = "Background"},
     {key = "wheel", label = "Mouse wheel scrolling", type = "checkbox", group = "Scrolling"},
     {key = "wheelSpeed", label = "Lines per wheel step", type = "slider", min = 1, max = 10, step = 1, group = "Scrolling"},
     {key = "shiftScroll", label = "Shift-wheel to top or bottom", type = "checkbox", group = "Scrolling"},
     {key = "hideButtons", label = "Hide scroll buttons", type = "checkbox", group = "Scrolling"},
-    {key = "width", label = "Width (0 keeps native size)", type = "number", min = 0, max = 4096, group = "Layout"},
-    {key = "height", label = "Height (0 keeps native size)", type = "number", min = 0, max = 4096, group = "Layout"},
+    {key = "width", label = "Width (0 keeps native size)", type = "slider", min = 0, max = 4096, step = 1, group = "Layout"},
+    {key = "height", label = "Height (0 keeps native size)", type = "slider", min = 0, max = 4096, step = 1, group = "Layout"},
+    {key = "tabWidth", label = "Tab width (0 fits text)", type = "slider", min = 0, max = 512, step = 1, group = "Tabs"},
+    {key = "tabHeight", label = "Tab height (0 keeps native height)", type = "slider", min = 0, max = 128, step = 1, group = "Tabs"},
+    {key = "tabBackground", label = "Tab background", type = "choice", choices = {{value="native",text="Native background"},{value="color",text="Solid color"},{value="tooltip",text="Tooltip texture"},{value="dialog",text="Dialog texture"}}, group = "Tabs"},
+    {key = "tabBackgroundColor", label = "Tab background color / tint", type = "color", group = "Tabs"},
+    {key = "tabBackgroundAlpha", label = "Tab background opacity (%)", type = "number", displayScale = 100, min = 0, max = 100, group = "Tabs"},
     {key = "tabFont", label = "Tab font", type = "choice", choices = Inherited(fontChoices), group = "Tabs"},
     {key = "tabFontSize", label = "Tab font size", type = "choice", choices = tabSizes, group = "Tabs"},
     {key = "tabFontOutline", label = "Tab font outline", type = "choice", choices = Inherited(outlineChoices), group = "Tabs"},
     {key = "tabBorderMode", label = "Tab gold border", type = "choice", choices = borderChoices, group = "Tabs", profileOnly = true},
     {key = "tabBorderStyle", label = "Tab border", type = "choice", choices = tabBorderChoices, group = "Tabs"},
     {key = "tabBorderColor", label = "Tab border color", type = "color", group = "Tabs"},
-    {key = "tabBorderAlpha", label = "Tab border opacity", type = "choice", choices = alphaChoices, group = "Tabs"},
+    {key = "tabBorderAlpha", label = "Tab border opacity (%)", type = "number", displayScale = 100, min = 0, max = 100, group = "Tabs"},
     {key = "tabOffsetX", label = "Horizontal tab offset", type = "slider", min = -128, max = 128, step = 1, group = "Tabs"},
     {key = "tabOffsetY", label = "Vertical tab offset", type = "slider", min = -128, max = 128, step = 1, group = "Tabs"},
     {key = "tabColorMode", label = "Tab text colors", type = "choice", choices = colorChoices, group = "Tabs"},
-    {key = "tabActiveColor", label = "Active tab color", type = "color", group = "Tabs"},
-    {key = "tabInactiveColor", label = "Inactive tab color", type = "color", group = "Tabs"},
+    {key = "tabActiveColor", label = "Active tab text color", type = "color", group = "Tabs"},
+    {key = "tabInactiveColor", label = "Inactive tab text color", type = "color", group = "Tabs"},
     {key = "tabShadowMode", label = "Tab text shadow", type = "choice", choices = shadowChoices, group = "Tab shadow"},
     {key = "tabShadowColor", label = "Tab shadow color", type = "color", group = "Tab shadow"},
-    {key = "tabShadowAlpha", label = "Tab shadow opacity", type = "choice", choices = alphaChoices, group = "Tab shadow"},
+    {key = "tabShadowAlpha", label = "Tab shadow opacity (%)", type = "number", displayScale = 100, min = 0, max = 100, group = "Tab shadow"},
     {key = "tabShadowX", label = "Horizontal tab shadow offset", type = "number", min = -8, max = 8, group = "Tab shadow"},
     {key = "tabShadowY", label = "Vertical tab shadow offset", type = "number", min = -8, max = 8, group = "Tab shadow"},
 }
@@ -106,6 +109,7 @@ local function AddAppearance(id, definition)
     field.get = function(store)
         if id then return Configuration.Resolve(store, id)[key] end
         if key == "tabBorderStyle" then return Configuration.Resolve(store)[key] end
+        if string.find(key,"^backgroundMargin") then return Configuration.Resolve(store,id)[key] end
         return store.defaults[key]
     end
     field.set = function(value)
@@ -182,26 +186,26 @@ local function Build()
     local editboxDefinitions = {
         {key = "position", label = "Input position", type = "choice", choices = {
             {value = "native", text = "Native position"}, {value = "top", text = "Above main chat"}, {value = "bottom", text = "Below main chat"}}, group = "Behavior"},
-        {key = "width", label = "Input width (0 keeps native width)", type = "number", min = 0, max = 4096, group = "Behavior"},
-        {key = "height", label = "Minimum input height (0 keeps native height)", type = "number", min = 0, max = 64, group = "Behavior",
+        {key = "width", label = "Input width (0 keeps native width)", type = "slider", min = 0, max = 4096, step = 1, group = "Behavior"},
+        {key = "height", label = "Minimum input height (0 keeps native height)", type = "slider", min = 0, max = 64, step = 1, group = "Behavior",
             tooltip = "An explicit height keeps at least eight pixels of room beyond the selected font size. Zero keeps the native height."},
-        {key = "gap", label = "Distance from main chat", type = "slider", min = 0, max = 32, step = 1, group = "Behavior"},
+        {key = "gap", label = "Distance from main chat", type = "slider", min = -512, max = 512, step = 1, group = "Behavior"},
         {key = "arrowKeys", label = "Arrow keys without Alt", type = "checkbox", group = "Behavior"},
         {key = "font", label = "Input font", type = "choice", choices = fontChoices, group = "Text"},
         {key = "fontSize", label = "Input font size", type = "choice", choices = sizes, group = "Text"},
         {key = "fontOutline", label = "Input font outline", type = "choice", choices = outlineChoices, group = "Text"},
         {key = "shadowMode", label = "Input text shadow", type = "choice", choices = shadowChoices, group = "Text shadow"},
         {key = "shadowColor", label = "Input shadow color", type = "color", group = "Text shadow"},
-        {key = "shadowAlpha", label = "Input shadow opacity", type = "choice", choices = alphaChoices, group = "Text shadow"},
+        {key = "shadowAlpha", label = "Input shadow opacity (%)", type = "number", displayScale = 100, min = 0, max = 100, group = "Text shadow"},
         {key = "shadowX", label = "Horizontal input shadow offset", type = "number", min = -8, max = 8, group = "Text shadow"},
         {key = "shadowY", label = "Vertical input shadow offset", type = "number", min = -8, max = 8, group = "Text shadow"},
         {key = "backgroundColor", label = "Input background color", type = "color", group = "Background"},
-        {key = "backgroundAlpha", label = "Input background opacity", type = "choice", choices = opacityChoices, group = "Background",
-            tooltip = "Native border and Native opacity restore the original input artwork. Custom background opacity replaces that artwork; choose Project, Dialog or Tooltip for an independent border."},
+        {key = "backgroundAlpha", label = "Input background opacity (%)", type = "number", displayScale = 100, min = -100, max = 100, group = "Background",
+            tooltip = "Native border and opacity -100 restore the original input artwork. Custom background opacity replaces that artwork; choose Project, Dialog or Tooltip for an independent border."},
         {key = "goldBorder", label = "Input project gold border", type = "checkbox", group = "Background", profileOnly = true},
         {key = "borderStyle", label = "Input border", type = "choice", choices = inputBorderChoices, group = "Background"},
         {key = "borderColor", label = "Input border color", type = "color", group = "Background"},
-        {key = "borderAlpha", label = "Input border opacity", type = "choice", choices = alphaChoices, group = "Background"},
+        {key = "borderAlpha", label = "Input border opacity (%)", type = "number", displayScale = 100, min = 0, max = 100, group = "Background"},
     }
     for _, definition in ipairs(editboxDefinitions) do AddEditbox(definition) end
     local historyDefinitions = {

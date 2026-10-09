@@ -18,8 +18,8 @@ scrolling and the shared input box.
 - Global appearance with individual native-window overrides and independent copies.
 - Font family, size, outline, shadow color and offset, and line spacing.
 - Message fading, visibility time and fade duration.
-- Background color, opacity and margins; Booty gold borders with adjustable opacity.
-- Separate tab fonts, shadows, active/inactive caption colors, border styles/colors and position offsets.
+- Background color, opacity and separate top/bottom/left/right margins; Booty gold borders with adjustable opacity.
+- Separate tab width/height, solid or textured backgrounds, fonts, shadows, active/inactive text colors, border styles/colors and position offsets.
 - Mouse-wheel speed, Shift-wheel to the top or bottom, optional scroll-button hiding.
 - Native window-size overrides and input position, width, minimum height, gap and arrow-key behavior.
 - Input fonts, shadows, background color and opacity, and native/project/dialog/tooltip borders.
@@ -56,7 +56,7 @@ offers Use global settings, Use individual settings and Copy global settings.
 Use global settings removes that window's overrides and follows future Global
 changes. Copy global settings creates a complete independent copy. Reset
 appearance on the history toolbar also restores Global for the chosen window.
-Set width or height to zero to keep the native size. Docked windows share the
+Width and height use sliders. Set window/input dimensions to zero to keep the native size. Tab width zero fits its caption; tab height zero keeps the native height. Native docking may cap tab widths to fit the dock. Docked windows share the
 main window size. After detaching a window, its saved individual size applies
 on the next setting change or native chat-window update.
 
@@ -144,3 +144,5 @@ BootyRaider continues receiving loot, roll and soft-reserve messages while chat
 filters or history are active.
 Hidden messages are omitted from BootyChat history and mention alerts. Native
 whisper sounds and flashing tabs remain available even if a whisper is hidden.
+
+Enter opacity as a number from 0 to 100; -100 selects native background opacity. Saved appearances and profiles keep their existing ratio format. Input distance accepts -512 to 512; negative values move the input toward/inside the main chat rectangle. Each background margin is adjustable independently from 0 to 256. Tab backgrounds offer native, solid color, Dialog and Tooltip textures with color tint and opacity.
