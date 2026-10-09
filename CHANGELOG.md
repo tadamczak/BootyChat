@@ -1,5 +1,9 @@
 # Changelog
 
+## 0.1.0-dev.8 — 2026-10-09
+
+- Use current Booty names for shared controls and documentation assets.
+
 ## 0.1.0-dev.7 — 2026-10-08
 
 - Index accepted repeated messages by context and exact body while retaining bounded session state and native link identities.

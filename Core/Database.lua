@@ -21,7 +21,7 @@ local function Defaults(store)
     if type(store.presentation.minimap) ~= "table" then store.presentation.minimap = {angle = 225} end
     store.addonVersion = Chat.version
 end
--- A new product owns no legacy MOS settings or chat logs.
+-- A new product owns no legacy monolith settings or chat logs.
 BootyLib.Data.RegisterOwner("chat", "BootyChatDB", function() return false end, Defaults)
 function Database.Ensure()
     local valid, failure = Configuration.Validate(BootyChatDB)

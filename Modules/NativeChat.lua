@@ -648,7 +648,7 @@ local function InputAppearance(options)
         Must(record.surface.SetBackdropColor, record.surface, color[1], color[2], color[3], math.max(0, options.backgroundAlpha))
         Must(record.surface.SetBackdropBorderColor, record.surface, 0, 0, 0, 0)
         Must(UI.SetProjectButtonOutline, record.surface, options.goldBorder)
-        record.inputOutline = record.surface.mosProjectOutline
+        record.inputOutline = record.surface.bootyProjectOutline
         Must(record.surface.Show, record.surface)
         for index, region in ipairs(record.inputRegions) do Texture(record, "InputBackground" .. index, true, region) end
     else
