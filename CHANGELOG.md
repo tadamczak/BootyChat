@@ -1,5 +1,10 @@
 # Changelog
 
+## 0.1.0-dev.12 — 2026-10-10
+
+- Stop native chat movement after mouse release, including release clicks after drag-stop; cancel an owned drag when disabling.
+- Keep original tab scripts, native selection and docking callbacks intact.
+
 ## 0.1.0-dev.11 — 2026-10-10
 
 - Cooperate with native tab renaming and docking geometry while retaining foreign-owner diagnostics.

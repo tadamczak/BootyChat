@@ -146,3 +146,5 @@ Hidden messages are omitted from BootyChat history and mention alerts. Native
 whisper sounds and flashing tabs remain available even if a whisper is hidden.
 
 Enter opacity as a number from 0 to 100; -100 selects native background opacity. Saved appearances and profiles keep their existing ratio format. Input distance accepts -512 to 512; negative values move the input toward/inside the main chat rectangle. Each background margin is adjustable independently from 0 to 256. Tab backgrounds offer native, solid color, Dialog and Tooltip textures with color tint and opacity.
+
+After unlocking a chat window, drag its native tab and release the mouse to finish. Disabling BootyChat also cancels an unfinished drag.

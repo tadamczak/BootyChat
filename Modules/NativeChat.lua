@@ -8,7 +8,7 @@ local Configuration = Chat.Services.Configuration
 local UI = (Chat.UI or BootyLib.UI).Components
 local records, editRecord = {}, nil
 local state = {active = false, restorationBlocked = false, windows = 0, foreignChanges = 0, deferredWheels = 0}
-local store, failureObserver, tabResizeLease
+local store, failureObserver, tabResizeLease, tabMovementLease
 local competingOwners = {"pfUI", "Prat", "Chatter"}
 local fonts = {friz = "Fonts\\FRIZQT__.TTF", arial = "Fonts\\ARIALN.TTF",
     morpheus = "Fonts\\MORPHEUS.TTF", skurri = "Fonts\\SKURRI.TTF"}
@@ -548,6 +548,38 @@ local function ReleaseTabHooks(record)
         end
     end
     return failure == nil, failure
+end
+local function FinishTabMovement(record)
+    if MOVING_CHATFRAME~=record.frame then return end
+    Must(record.frame.StopMovingOrSizing,record.frame)
+    MOVING_CHATFRAME=nil
+end
+local function InstallTabMovement()
+    if tabMovementLease then
+        if FCF_Tab_OnClick~=tabMovementLease.guard then error("Native tab click has another owner.") end
+        return
+    end
+    Require(_G,{"FCF_Tab_OnClick"},"Native tab click")
+    local lease={original=FCF_Tab_OnClick}
+    lease.guard=function(button)
+        local tab=this
+        if not state.active then return lease.original(button) end
+        local ok,result=Call(lease.original,button)
+        if not ok then return ReportFailure(result) end
+        -- Stock NORMAL/up clicks can restart movement after OnDragStop.
+        -- Finish after that callback; keep the native tab scripts unchanged.
+        if tab and (button=="RightButton" or button=="LeftButton" and tab:GetButtonState()=="NORMAL") then
+            for _,record in pairs(records) do
+                if record.tab==tab then
+                    local stopped,reason=Call(FinishTabMovement,record)
+                    if not stopped then return ReportFailure(reason) end
+                    break
+                end
+            end
+        end
+        return result
+    end
+    FCF_Tab_OnClick=lease.guard;tabMovementLease=lease
 end
 local function TabColor(record, label, options)
     if options.tabColorMode ~= "custom" then
@@ -1101,6 +1133,14 @@ function Native.Stop()
     for _, record in pairs(records) do Disable(record); record.wheelDeferred = nil end
     if editRecord then Disable(editRecord) end
     local failure
+    for _,record in pairs(records) do
+        local ok,reason=Call(FinishTabMovement,record)
+        if not ok then failure=failure or reason end
+    end
+    if tabMovementLease then
+        local ok,reason=ReleaseSlot(_G,"FCF_Tab_OnClick",tabMovementLease.original,tabMovementLease.guard)
+        if ok then tabMovementLease=nil else failure=failure or reason end
+    end
     if tabResizeLease then
         local ok,reason=ReleaseSlot(_G,"PanelTemplates_TabResize",tabResizeLease.original,tabResizeLease.guard)
         if ok then tabResizeLease=nil else failure=reason end
@@ -1137,6 +1177,7 @@ local function Apply(value, refresh)
         local owner = CompetingOwner()
         if owner then error(owner) end
         InstallTabResize()
+        InstallTabMovement()
         if refresh then
             for id, record in pairs(records) do
                 local lease = record.leases.font
