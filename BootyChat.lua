@@ -11,10 +11,10 @@ Chat.Product = {
     Stop = Runtime.Stop, Start = Runtime.Start, IsBusy = Runtime.IsBusy,
     BeginSettingsBatch = Runtime.BeginSettingsBatch, EndSettingsBatch = Runtime.EndSettingsBatch,
     OnSettingsProfileApplied = Runtime.OnSettingsProfileApplied,
-    views = {{id = "chat", label = "Chat", icon = "list", create = Runtime.CreateView,
-        IsAvailable = Runtime.IsAvailable, width = 580, height = 420, minWidth = 350, minHeight = 300}},
+    views = {{id = "chat", label = "Chat", icon = "archive", create = Runtime.CreateView,
+        IsAvailable = Runtime.IsAvailable, width = 900, height = 640, minWidth = 350, minHeight = 300}},
     GetQuickMenu = function(host)
-        return {{text = "Chat", icon = "list", enabled = Runtime.IsAvailable(), action = function() return host.OpenView("chat") end}}
+        return {{text = "Chat", icon = "archive", enabled = Runtime.IsAvailable(), action = function() return host.OpenView("chat") end}}
     end,
 }
 local product, failure = BootyLib.RegisterProduct(Chat.Product)

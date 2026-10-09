@@ -101,7 +101,7 @@ local function AddAppearance(id, definition)
     end
     field.profile = not id
     if id then
-        field.tooltip = (field.tooltip and field.tooltip .. "\n\n" or "") .. "This setting overrides the common appearance for native chat window " .. id .. ". Reset this window from the Chat page to inherit the common appearance again."
+        field.tooltip = (field.tooltip and field.tooltip .. "\n\n" or "") .. "This setting overrides the common appearance for native chat window " .. id .. ". Use Reset appearance on the Chat history toolbar to inherit the common appearance again."
     end
     if key == "width" or key == "height" then
         field.tooltip = (field.tooltip or "") .. " Docked windows share the main window size. An individual size takes effect for a detached window on the next setting change or chat-window update; zero keeps the native size."

@@ -27,7 +27,7 @@ scrolling and the shared input box.
 - Standalone configuration or the shared Booty Suite dashboard and settings.
 - Native tabs, channels, filters, docking, menus and item links remain available.
 - Bounded history of messages delivered to native windows, with literal text search and window filters.
-- Twelve-message pages, clickable native link preview, and copying a selected message or page.
+- Live twelve-message pages, clickable native link preview, and copying a selected message or page.
 - Optional history across sessions and explicit clearing for one window or all windows.
 - Optional blocked phrases and repeated-message hiding, scoped to selected channels or player-message groups.
 - Character-name and custom-phrase mentions, adjustable text color and optional sound with a cooldown.
@@ -44,14 +44,15 @@ new addon appears in the character-selection list.
 
 ## Usage
 
-Use `/bc` or `/bootychat` to open Chat, and `/bc settings` to open its settings.
+Use `/bc` or `/bootychat` to open Chat history, and `/bc settings` to open its settings.
 Use `/bc disable` to restore the native appearance and `/bc enable` to apply
 BootyChat again. These commands preserve your channels and messages.
 
 Right-click a native chat tab to create, rename or filter tabs. Use the native
 Unlock option, tab dragging and resize handle to position your windows.
 Settings window numbers follow native chat slots. Common appearance applies
-until you change an individual window setting; Reset window restores inheritance.
+until you change an individual window setting; Reset appearance on the history
+toolbar lets you choose a window and restore its common appearance.
 Set width or height to zero to keep the native size. Docked windows share the
 main window size. After detaching a window, its saved individual size applies
 on the next setting change or native chat-window update.
@@ -68,15 +69,17 @@ off; with that border on, it selects a transparent custom fill.
 Use the shared Profile page to add, save, load, delete or export an appearance
 profile. Profiles include the common appearance, input options and individual
 window overrides. Inherited window settings remain inherited after loading.
-The profile's Reset defaults action also clears window overrides; Reset window
-on the Chat page clears only the selected window. Loading or resetting a profile
+The profile's Reset defaults action also clears window overrides; Reset appearance
+on the Chat history toolbar clears only the window you choose. Loading or resetting a profile
 preserves whether BootyChat is enabled.
 
-Use `/bc history` or the Chat page's History button to browse retained messages.
+Chat opens directly to retained messages. `/bc history` opens the same page.
 Search matches visible text literally; ASCII letters ignore case. Select a
 window or All windows, then use Previous and Next for twelve-message pages.
-New messages show a Refresh notice without changing the displayed page or copy
-text. Select a message to preview its complete text and native links. Copy
+The newest page updates automatically. Pause or browsing older pages keeps the
+display stable; Live returns to the newest messages. Copying keeps a fixed
+snapshot until you close the copy field. Refresh updates the current page.
+Select a message to preview its complete text and native links. Copy
 selected or Copy page opens a field with complete plain text; press Ctrl+C.
 
 History starts with this session and does not import messages already visible

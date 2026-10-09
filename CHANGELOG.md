@@ -1,5 +1,12 @@
 # Changelog
 
+## 0.1.0-dev.9 — 2026-10-09
+
+- Open live chat history directly, with project headings, toolbar separators and relevant action icons.
+- Refresh new messages automatically while preserving older pages, copy snapshots and visible errors.
+- Keep idle and hidden history inactive and bound the default history query to one page.
+- Move individual window appearance resets into the toolbar menu.
+
 ## 0.1.0-dev.8 — 2026-10-09
 
 - Use current Booty names for shared controls and documentation assets.

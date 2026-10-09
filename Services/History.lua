@@ -243,6 +243,16 @@ function Methods:Query(windowId, needle, offset, limit)
     if windowId ~= nil and not Window(windowId, self.windowCount) or type(needle) ~= "string" or
         string.len(needle) > History.MAX_QUERY_BYTES or not Integer(offset, 0, MAX_ID) or
         not Integer(limit, 1, History.PAGE_SIZE) then return nil, "Invalid history search or page arguments." end
+    if windowId == nil and needle == "" then
+        -- The live all-window page needs only its bounded record copies.
+        local total, records = self.count, {}
+        if total == 0 then offset = 0
+        elseif offset >= total then offset = math.floor((total - 1) / limit) * limit end
+        for index = offset + 1, math.min(total, offset + limit) do
+            records[table.getn(records) + 1] = Copy(self.slots[Index(self, total - index)])
+        end
+        return {records = records, total = total, offset = offset}
+    end
     local matches, total = {}, 0
     local query = LowerASCII(needle)
     for index = self.count - 1, 0, -1 do
