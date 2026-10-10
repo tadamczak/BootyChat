@@ -28,6 +28,7 @@ scrolling and the shared input box.
 - Native tabs, channels, filters, docking, menus and item links remain available.
 - Bounded history of messages delivered to native windows, with literal text search and window filters.
 - Live twelve-message pages, clickable native link preview, and copying a selected message or page.
+- History collection is off by default; enable Collect chat history to record messages.
 - Optional history across sessions and explicit clearing for one window or all windows.
 - Optional blocked phrases and repeated-message hiding, scoped to selected channels or player-message groups.
 - Character-name and custom-phrase mentions, adjustable text color and optional sound with a cooldown.
@@ -148,3 +149,7 @@ whisper sounds and flashing tabs remain available even if a whisper is hidden.
 Enter opacity as a number from 0 to 100; -100 selects native background opacity. Saved appearances and profiles keep their existing ratio format. Input distance accepts -512 to 512; negative values move the input toward/inside the main chat rectangle. Each background margin is adjustable independently from 0 to 256. Tab backgrounds offer native, solid color, Dialog and Tooltip textures with color tint and opacity.
 
 After unlocking a chat window, drag its native tab and release the mouse to finish. Disabling BootyChat also cancels an unfinished drag.
+
+Chat > Global > Tabs offers Keep tabs always visible. Individual windows can override it. Custom tab heights apply to their artwork and clickable rectangle; choosing Solid color hides native artwork.
+
+Chat > Input > Behavior provides separate left/right/top/bottom content margins. Choose Free position for X/Y coordinates, or enable Unlock input for dragging. Drag the visible input, then uncheck the option or use `/bc lockinput`; `/bc unlockinput` starts editing. Position is saved in appearance profiles; unlocking is temporary and covers the typing area until locked. An initially hidden input is hidden again when editing finishes.

@@ -1,5 +1,11 @@
 # Changelog
 
+## 0.1.0-dev.13 — 2026-10-11
+
+- Add persistent tab visibility and match native artwork, hover and hit bounds to custom tab sizes; solid colors replace native textures.
+- Add four input text margins, free coordinates and a pooled drag handle with atomic saved positions.
+- Disable history collection by default while retaining explicit saved preferences.
+
 ## 0.1.0-dev.12 — 2026-10-10
 
 - Stop native chat movement after mouse release, including release clicks after drag-stop; cancel an owned drag when disabling.

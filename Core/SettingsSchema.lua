@@ -59,6 +59,7 @@ local definitions = {
     {key = "hideButtons", label = "Hide scroll buttons", type = "checkbox", group = "Scrolling"},
     {key = "width", label = "Width (0 keeps native size)", type = "slider", min = 0, max = 4096, step = 1, group = "Layout"},
     {key = "height", label = "Height (0 keeps native size)", type = "slider", min = 0, max = 4096, step = 1, group = "Layout"},
+    {key = "tabsAlwaysVisible", label = "Keep tabs always visible", type = "checkbox", group = "Tabs"},
     {key = "tabWidth", label = "Tab width (0 fits text)", type = "slider", min = 0, max = 512, step = 1, group = "Tabs"},
     {key = "tabHeight", label = "Tab height (0 keeps native height)", type = "slider", min = 0, max = 128, step = 1, group = "Tabs"},
     {key = "tabBackground", label = "Tab background", type = "choice", choices = {{value="native",text="Native background"},{value="color",text="Solid color"},{value="tooltip",text="Tooltip texture"},{value="dialog",text="Dialog texture"}}, group = "Tabs"},
@@ -185,10 +186,16 @@ local function Build()
         set = function(value) Required(Runtime.SetWindowOverrides(value)) end})
     local editboxDefinitions = {
         {key = "position", label = "Input position", type = "choice", choices = {
-            {value = "native", text = "Native position"}, {value = "top", text = "Above main chat"}, {value = "bottom", text = "Below main chat"}}, group = "Behavior"},
+            {value = "native", text = "Native position"}, {value = "top", text = "Above main chat"}, {value = "bottom", text = "Below main chat"}, {value = "free", text = "Free position"}}, group = "Behavior"},
         {key = "width", label = "Input width (0 keeps native width)", type = "slider", min = 0, max = 4096, step = 1, group = "Behavior"},
         {key = "height", label = "Minimum input height (0 keeps native height)", type = "slider", min = 0, max = 64, step = 1, group = "Behavior",
             tooltip = "An explicit height keeps at least eight pixels of room beyond the selected font size. Zero keeps the native height."},
+        {key = "offsetX", label = "Free position X", type = "slider", min = -4096, max = 4096, step = 1, group = "Behavior"},
+        {key = "offsetY", label = "Free position Y", type = "slider", min = -4096, max = 4096, step = 1, group = "Behavior"},
+        {key = "marginLeft", label = "Left input margin", type = "slider", min = 0, max = 128, step = 1, group = "Behavior"},
+        {key = "marginRight", label = "Right input margin", type = "slider", min = 0, max = 128, step = 1, group = "Behavior"},
+        {key = "marginTop", label = "Top input margin", type = "slider", min = 0, max = 128, step = 1, group = "Behavior"},
+        {key = "marginBottom", label = "Bottom input margin", type = "slider", min = 0, max = 128, step = 1, group = "Behavior"},
         {key = "gap", label = "Distance from main chat", type = "slider", min = -512, max = 512, step = 1, group = "Behavior"},
         {key = "arrowKeys", label = "Arrow keys without Alt", type = "checkbox", group = "Behavior"},
         {key = "font", label = "Input font", type = "choice", choices = fontChoices, group = "Text"},
@@ -208,6 +215,9 @@ local function Build()
         {key = "borderAlpha", label = "Input border opacity (%)", type = "number", displayScale = 100, min = 0, max = 100, group = "Background"},
     }
     for _, definition in ipairs(editboxDefinitions) do AddEditbox(definition) end
+    table.insert(fields,{key="input_unlock",label="Unlock input for dragging",type="checkbox",default=false,profile=false,persist=false,path={"Chat","Input","Behavior"},
+        tooltip="Drag the visible input, then uncheck this option or use /bc lockinput. Editing temporarily covers the typing area; its position is saved as Free position.",
+        get=function() return Runtime.IsInputEditing() end,set=function(value) Required(Runtime.SetInputEditing(value)) end})
     local historyDefinitions = {
         {key = "enabled", label = "Collect chat history", type = "checkbox",
             tooltip = "Collect messages submitted to native chat windows. Pausing collection keeps existing session history."},

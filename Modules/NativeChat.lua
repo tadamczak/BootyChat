@@ -8,7 +8,7 @@ local Configuration = Chat.Services.Configuration
 local UI = (Chat.UI or BootyLib.UI).Components
 local records, editRecord = {}, nil
 local state = {active = false, restorationBlocked = false, windows = 0, foreignChanges = 0, deferredWheels = 0}
-local store, failureObserver, tabResizeLease, tabMovementLease
+local store, failureObserver, tabResizeLease, tabMovementLease, mouseOverLease
 local competingOwners = {"pfUI", "Prat", "Chatter"}
 local fonts = {friz = "Fonts\\FRIZQT__.TTF", arial = "Fonts\\ARIALN.TTF",
     morpheus = "Fonts\\MORPHEUS.TTF", skurri = "Fonts\\SKURRI.TTF"}
@@ -124,6 +124,8 @@ local function ReadWidth(frame) return frame:GetWidth() end
 local function SetWidth(frame, value) return frame:SetWidth(value) end
 local function ReadHeight(frame) return frame:GetHeight() end
 local function SetHeight(frame, value) return frame:SetHeight(value) end
+local function ReadHitRect(frame) return {frame:GetHitRectInsets()} end
+local function SetHitRect(frame,value) return frame:SetHitRectInsets(unpack(value)) end
 -- Both getter/setter pairs are present in the 1.12.1 engine method tables:
 -- ClassicAPI/docs/BlizzardScriptAPI.md (Frame and EditBox), not Classic APIs.
 local function ReadWheel(frame) return Enabled(frame:IsMouseWheelEnabled()) end
@@ -814,10 +816,94 @@ local function TabAppearance(record, tab, options)
     elseif record.tabBackground then Must(record.tabBackground.Hide,record.tabBackground) end
     for _, suffix in ipairs(tabTextureNames) do
         local name = "Tab" .. suffix
-        if style ~= "native" then Texture(record, name, true)
+        local region=Global(record.name..name)
+        if region then
+            record.tabArt=record.tabArt or {}
+            local art=record.tabArt[suffix]
+            if not art then art={frame=region,name=record.name..name,leases={},textures={},buttons={}};record.tabArt[suffix]=art end
+            Property(art,"height",ReadHeight,SetHeight,options.tabHeight>0 and options.tabHeight or nil)
+        end
+        if style ~= "native" or options.tabBackground~="native" then Texture(record, name, true)
         else local restored, reason = ReleaseTexture(record, name); if not restored then error(reason) end end
     end
     TabPosition(record, tab, options)
+end
+local function ReleaseTabVisibility(record)
+    local lease=record.tabVisibility
+    if not lease then return true end
+    lease.enabled=false
+    if lease.frame.Show==lease.showGuard and lease.frame.Hide==lease.hideGuard and lease.frame.SetAlpha==lease.alphaGuard then
+        Must(lease.alpha,lease.frame,lease.nativeAlpha)
+        Must(lease.nativeShown and lease.show or lease.hide,lease.frame)
+    end
+    local ok,reason=ReleaseSlot(lease.frame,"Show",lease.show,lease.showGuard)
+    if not ok then return false,reason end
+    ok,reason=ReleaseSlot(lease.frame,"Hide",lease.hide,lease.hideGuard)
+    if not ok then return false,reason end
+    ok,reason=ReleaseSlot(lease.frame,"SetAlpha",lease.alpha,lease.alphaGuard)
+    if ok then record.tabVisibility=nil end
+    return ok,reason
+end
+local function TabVisibility(record,tab,options)
+    local _,_,_,_,_,_,shown=GetChatWindowInfo(record.frame:GetID())
+    if not options.tabsAlwaysVisible or not Enabled(shown) then
+        local ok,reason=ReleaseTabVisibility(record);if not ok then error(reason) end;return
+    end
+    local lease=record.tabVisibility
+    if not lease then
+        lease={frame=tab,show=tab.Show,hide=tab.Hide,alpha=tab.SetAlpha,nativeShown=Enabled(tab:IsShown()),nativeAlpha=tab:GetAlpha(),enabled=true}
+        record.tabVisibility=lease
+        local function ShowOpen(owner)
+            local _,_,_,_,_,_,open=GetChatWindowInfo(record.frame:GetID())
+            local result
+            if Enabled(open) then
+                if not Enabled(owner:IsShown()) then result=lease.show(owner) end
+            else result=lease.hide(owner) end
+            if Enabled(owner:IsShown())~=Enabled(open) then error("Native tab visibility write was declined.") end
+            return result
+        end
+        lease.showGuard=function(owner)
+            if not lease.enabled or owner~=tab then return lease.show(owner) end
+            lease.nativeShown=true;local ok,reason=Call(ShowOpen,owner)
+            if not ok or reason==false then ReportFailure(ok and "Tab visibility was declined." or reason) end
+        end
+        lease.hideGuard=function(owner)
+            if not lease.enabled or owner~=tab then return lease.hide(owner) end
+            lease.nativeShown=false;local ok,reason=Call(ShowOpen,owner)
+            if not ok or reason==false then ReportFailure(ok and "Tab visibility was declined." or reason) end
+        end
+        lease.alphaGuard=function(owner,value)
+            if not lease.enabled or owner~=tab then return lease.alpha(owner,value) end
+            lease.nativeAlpha=value
+            if owner:GetAlpha()==1 then return end
+            local ok,reason=Call(lease.alpha,owner,1)
+            if not ok or reason==false then ReportFailure(ok and "Tab alpha was declined." or reason) end
+            if owner:GetAlpha()~=1 then ReportFailure("Tab alpha write was declined.") end
+        end
+        tab.Show,tab.Hide,tab.SetAlpha=lease.showGuard,lease.hideGuard,lease.alphaGuard
+    elseif tab.Show~=lease.showGuard or tab.Hide~=lease.hideGuard or tab.SetAlpha~=lease.alphaGuard then error(record.name.." tab visibility has another owner.") end
+    Must(lease.alpha,tab,1);Must(lease.show,tab)
+    if tab:GetAlpha()~=1 or not Enabled(tab:IsShown()) then error("Native tab visibility write was declined.") end
+end
+local function InstallTabHover()
+    if mouseOverLease then
+        if MouseIsOver~=mouseOverLease.guard then error("Native mouse-over has another owner.") end
+        return
+    end
+    local lease={original=MouseIsOver,frames={}}
+    Require(_G,{"MouseIsOver"},"Native mouse-over")
+    lease.guard=function(frame,top,bottom,left,right)
+        local record=lease.frames[frame]
+        if state.active and record and top==45 and bottom==-10 and left==-5 and right==5 and record.tabOptions.tabHeight>0 then
+            top=record.tabOptions.tabHeight+math.max(0,record.tabOptions.tabOffsetY)
+        end
+        if right~=nil then return lease.original(frame,top,bottom,left,right) end
+        if left~=nil then return lease.original(frame,top,bottom,left) end
+        if bottom~=nil then return lease.original(frame,top,bottom) end
+        if top~=nil then return lease.original(frame,top) end
+        return lease.original(frame)
+    end
+    MouseIsOver=lease.guard;mouseOverLease=lease
 end
 local function ApplyWindow(record, options)
     ApplyMessageText(record, options)
@@ -826,11 +912,15 @@ local function ApplyWindow(record, options)
         if record.tab and record.tab ~= tab then error(record.name .. " tab was replaced.") end
         record.tab = tab
         record.tabOptions=options
+        if mouseOverLease then mouseOverLease.frames[record.frame]=record end
+        TabVisibility(record,tab,options)
         if not record.tabRecord then
             Require(tab,{"GetHeight","SetHeight"},record.name.."Tab")
             record.tabRecord={frame=tab,name=record.name.."Tab",leases={},textures={},buttons={}}
         end
         Property(record.tabRecord,"height",ReadHeight,SetHeight,options.tabHeight>0 and options.tabHeight or nil)
+        if options.tabHeight>0 or options.tabWidth>0 then Require(tab,{"GetHitRectInsets","SetHitRectInsets"},record.name.."Tab") end
+        Property(record.tabRecord,"hitRect",ReadHitRect,SetHitRect,(options.tabHeight>0 or options.tabWidth>0) and {0,0,0,0} or nil)
         local label = Global(record.name .. "TabText") or type(tab.GetFontString) == "function" and tab:GetFontString()
         if label then
             if not record.tabText then record.tabText = NewRecord(label, record.name .. "TabText", true) end
@@ -971,14 +1061,16 @@ local function ApplyEditbox(options)
             options.fontOutline == "native" and original[3] or options.fontOutline == "none" and "" or options.fontOutline})
     else Property(editRecord, "font", ReadFont, SetFont, nil) end
     Shadow(editRecord, options.shadowMode, options.shadowColor, options.shadowAlpha, options.shadowX, options.shadowY)
-    if options.height > 0 then
+    if options.height > 0 or options.marginTop+options.marginBottom>0 then
         Require(frame, {"GetHeight", "SetHeight"}, "ChatFrameEditBox")
         local _, size = frame:GetFont()
-        Property(editRecord, "height", ReadHeight, SetHeight, math.max(options.height, size + 8))
+        local nativeHeight=editRecord.leases.height and editRecord.leases.height.original or frame:GetHeight()
+        Property(editRecord, "height", ReadHeight, SetHeight, math.max(options.height>0 and options.height or nativeHeight, size + 8+options.marginTop+options.marginBottom))
     else Property(editRecord, "height", ReadHeight, SetHeight, nil) end
     Require(frame, {"GetAltArrowKeyMode", "SetAltArrowKeyMode"}, "ChatFrameEditBox")
     Property(editRecord, "arrows", ReadArrows, SetArrows, not options.arrowKeys)
     local width = options.width or 0
+    local freeWidth=options.position=="free" and (editRecord.leases.width and editRecord.leases.width.original or frame:GetWidth()) or nil
     if options.position ~= "native" or width > 0 then
         Require(frame, {"GetNumPoints", "GetPoint", "ClearAllPoints", "SetPoint"}, "ChatFrameEditBox")
         -- Blizzard 1.12 has one shared editbox statically attached to frame 1.
@@ -986,7 +1078,9 @@ local function ApplyEditbox(options)
         local owner = Global("ChatFrame1")
         local top = options.position == "top"
         local points
-        if options.position == "native" then
+        if options.position == "free" then
+            points={{"CENTER",UIParent,"CENTER",options.offsetX,options.offsetY}}
+        elseif options.position == "native" then
             local native = editRecord.leases.points and editRecord.leases.points.original or ReadPoints(frame)
             if not native[1] then error("Native chat input anchor is unavailable.") end
             points = CopyPoints({native[1]})
@@ -1000,7 +1094,7 @@ local function ApplyEditbox(options)
         Property(editRecord, "points", ReadPoints, SetPoints, points)
     else Property(editRecord, "points", ReadPoints, SetPoints, nil) end
     if width > 0 then Require(frame, {"GetWidth", "SetWidth"}, "ChatFrameEditBox") end
-    Property(editRecord, "width", ReadWidth, SetWidth, width > 0 and width or nil)
+    Property(editRecord, "width", ReadWidth, SetWidth, width > 0 and width or freeWidth)
     local header = Global("ChatFrameEditBoxHeader")
     if header then
         if not editRecord.header then editRecord.header = NewRecord(header, "ChatFrameEditBoxHeader", true) end
@@ -1027,6 +1121,109 @@ local function ApplyEditbox(options)
         end
     end
     InputAppearance(options)
+    if editRecord.header then
+        local desired
+        if options.marginLeft~=0 or options.marginTop~=options.marginBottom then
+            local native=editRecord.header.leases.points and editRecord.header.leases.points.original or ReadPoints(editRecord.header.frame)
+            desired=CopyPoints(native)
+            for _,point in ipairs(desired) do point[4]=point[4]+options.marginLeft;point[5]=point[5]+(options.marginBottom-options.marginTop)/2 end
+        end
+        Property(editRecord.header,"points",ReadPoints,SetPoints,desired)
+    end
+end
+local function ReleaseInputInsets()
+    local lease=editRecord and editRecord.inputInsets
+    if not lease then return true end
+    lease.enabled=false
+    if lease.frame.SetTextInsets==lease.guard then Must(lease.setter,lease.frame,unpack(lease.native)) end
+    local ok,reason=ReleaseSlot(lease.frame,"SetTextInsets",lease.setter,lease.guard)
+    if ok then editRecord.inputInsets=nil end
+    return ok,reason
+end
+local function InputInsets(options)
+    local frame=editRecord.frame
+    local values={options.marginLeft,options.marginRight,options.marginTop,options.marginBottom}
+    if values[1]+values[2]+values[3]+values[4]==0 then
+        local ok,reason=ReleaseInputInsets();if not ok then error(reason) end;return
+    end
+    Require(frame,{"GetTextInsets","SetTextInsets"},"Chat input padding")
+    local lease=editRecord.inputInsets
+    if not lease then
+        lease={frame=frame,setter=frame.SetTextInsets,native={frame:GetTextInsets()},enabled=true}
+        editRecord.inputInsets=lease
+        lease.guard=function(owner,l,r,t,b)
+            if not lease.enabled or owner~=frame then return lease.setter(owner,l,r,t,b) end
+            lease.native[1],lease.native[2],lease.native[3],lease.native[4]=l,r,t,b
+            local margins=lease.margins
+            local ok,reason=Call(lease.setter,owner,l+margins[1],r+margins[2],t+margins[3],b+margins[4])
+            if not ok or reason==false then ReportFailure(ok and "Chat input margins were declined." or reason) end
+            local al,ar,at,ab=owner:GetTextInsets()
+            if not Equal(al,l+margins[1],0.001) or not Equal(ar,r+margins[2],0.001) or
+                not Equal(at,t+margins[3],0.001) or not Equal(ab,b+margins[4],0.001) then ReportFailure("Chat input margins write was declined.") end
+        end
+        frame.SetTextInsets=lease.guard
+    elseif frame.SetTextInsets~=lease.guard then error("Chat input margins have another owner.") end
+    lease.margins=values
+    local original=lease.native
+    Must(lease.setter,frame,original[1]+values[1],original[2]+values[2],original[3]+values[3],original[4]+values[4])
+    if not Equal({frame:GetTextInsets()},{original[1]+values[1],original[2]+values[2],original[3]+values[3],original[4]+values[4]},0.001) then error("Chat input margins write was declined.") end
+end
+local function CancelInputDrag()
+    if not editRecord or not editRecord.inputDragging then return end
+    Must(editRecord.frame.StopMovingOrSizing,editRecord.frame);editRecord.inputDragging=nil
+end
+local function ReadMovable(frame) return Enabled(frame:IsMovable()) end
+local function SetMovable(frame,value) return frame:SetMovable(value and 1 or nil) end
+function Native.SetInputEditing(value,save)
+    if type(value)~="boolean" then return false,"Choose input editing on or off." end
+    if not state.active then if not value then return true end;return false,"Enable BootyChat before moving its input." end
+    local ok,reason=Call(function()
+        CancelInputDrag()
+        if not value then
+            state.inputEditing=false
+            if editRecord.inputHandle then Must(editRecord.inputHandle.Hide,editRecord.inputHandle) end
+            if editRecord.inputEditingShown==false then Must(editRecord.frame.Hide,editRecord.frame) end
+            editRecord.inputEditingShown=nil
+            Property(editRecord,"movable",ReadMovable,SetMovable,nil);return
+        end
+        Require(editRecord.frame,{"IsMovable","SetMovable","StartMoving","StopMovingOrSizing","GetCenter","GetEffectiveScale"},"Chat input movement")
+        if not state.inputEditing then editRecord.inputEditingShown=Enabled(editRecord.frame:IsShown()) end
+        Property(editRecord,"movable",ReadMovable,SetMovable,true)
+        if not editRecord.inputHandle then
+            local handle=UI.CreateControl(nil,editRecord.frame);editRecord.inputHandle=handle
+            Must(handle.EnableMouse,handle,true);Must(handle.SetAllPoints,handle,editRecord.frame)
+            Must(handle.SetFrameLevel,handle,editRecord.frame:GetFrameLevel()+5)
+            Must(UI.SetProjectButtonOutline,handle,true)
+            handle:RegisterForDrag("LeftButton")
+            handle:SetScript("OnDragStart",function()
+                if not state.inputEditing then return end
+                local started,failure=Call(editRecord.frame.StartMoving,editRecord.frame)
+                if not started then ReportFailure(failure) end
+                editRecord.inputDragging=true
+            end)
+            local function Finish()
+                if not editRecord.inputDragging then return end
+                local finished,failure=Call(function()
+                    CancelInputDrag()
+                    local x,y=editRecord.frame:GetCenter();local px,py=UIParent:GetCenter()
+                    assert(x and y and px and py,"Chat input position is unavailable.")
+                    local scale=editRecord.frame:GetEffectiveScale()/UIParent:GetEffectiveScale()
+                    local saved,error=editRecord.inputSave(math.floor(x*scale-px+0.5),math.floor(y*scale-py+0.5))
+                    assert(saved,error)
+                end)
+                if not finished then ReportFailure(failure) end
+            end
+            handle:SetScript("OnDragStop",Finish);handle:SetScript("OnMouseUp",Finish)
+            handle:SetScript("OnHide",function() local stopped,failure=Call(CancelInputDrag);if not stopped then ReportFailure(failure) end end)
+        end
+        editRecord.inputSave=assert(save,"Input position callback is required.")
+        state.inputEditing=true;Must(editRecord.frame.Show,editRecord.frame);Must(editRecord.inputHandle.Show,editRecord.inputHandle)
+    end)
+    if not ok then
+        local _,failure=Call(ReportFailure,reason)
+        return false,tostring(failure)
+    end
+    return true
 end
 local function ApplyAll()
     state.windows = 0
@@ -1040,7 +1237,10 @@ local function ApplyAll()
             state.windows = state.windows + 1
         elseif id == 1 then error("Native ChatFrame1 is unavailable.") end
     end
-    ApplyEditbox(Configuration.ResolveEditbox(store))
+    CancelInputDrag()
+    local inputOptions=Configuration.ResolveEditbox(store)
+    ApplyEditbox(inputOptions)
+    InputInsets(inputOptions)
     if state.dockChanged then
         if type(FCF_DockUpdate) ~= "function" then error("Native chat docking layout is unavailable.") end
         state.dockDirty = true
@@ -1081,6 +1281,8 @@ local function Release(record)
         if ok then record.wheel = nil else failure = reason end
     end
     local hooksOK, hooksReason = Attempt(ReleaseTabHooks, record)
+    local visibleOK,visibleReason=Attempt(ReleaseTabVisibility,record)
+    if not visibleOK then failure=failure or visibleReason end
     local colorOK, colorReason = Attempt(ReleaseTabColor, record)
     if not hooksOK or not colorOK then failure = failure or hooksReason or colorReason end
     local positionOK, positionReason = Attempt(ReleaseTabPosition, record)
@@ -1121,6 +1323,7 @@ local function Release(record)
     end
     if record.tabBackground then local ok,reason=HideSurface(record.tabBackground);if not ok then failure=failure or reason end end
     if record.tabRecord then local ok,reason=Attempt(Release,record.tabRecord);if not ok then failure=failure or reason end end
+    if record.tabArt then for _,art in pairs(record.tabArt) do local ok,reason=Attempt(Release,art);if not ok then failure=failure or reason end end end
     if record.tabText then local ok, reason = Attempt(Release, record.tabText); if not ok then failure = failure or reason end end
     if record.tabLayout then local ok, reason = Attempt(Release, record.tabLayout); if not ok then failure = failure or reason end end
     if record.header then local ok, reason = Attempt(Release, record.header); if not ok then failure = failure or reason end end
@@ -1133,6 +1336,18 @@ function Native.Stop()
     for _, record in pairs(records) do Disable(record); record.wheelDeferred = nil end
     if editRecord then Disable(editRecord) end
     local failure
+    state.inputEditing=false
+    local inputOK,inputReason=Call(CancelInputDrag)
+    if not inputOK then failure=inputReason end
+    local insetsOK,insetsReason=Attempt(ReleaseInputInsets)
+    if not insetsOK then failure=failure or insetsReason end
+    if editRecord and editRecord.inputHandle then local ok,reason=HideSurface(editRecord.inputHandle);if not ok then failure=failure or reason end end
+    if editRecord and editRecord.inputEditingShown==false then local ok,reason=Call(editRecord.frame.Hide,editRecord.frame);if not ok then failure=failure or reason end end
+    if editRecord then editRecord.inputEditingShown=nil end
+    if mouseOverLease then
+        local ok,reason=ReleaseSlot(_G,"MouseIsOver",mouseOverLease.original,mouseOverLease.guard)
+        if ok then mouseOverLease=nil else failure=reason end
+    end
     for _,record in pairs(records) do
         local ok,reason=Call(FinishTabMovement,record)
         if not ok then failure=failure or reason end
@@ -1178,6 +1393,7 @@ local function Apply(value, refresh)
         if owner then error(owner) end
         InstallTabResize()
         InstallTabMovement()
+        InstallTabHover()
         if refresh then
             for id, record in pairs(records) do
                 local lease = record.leases.font

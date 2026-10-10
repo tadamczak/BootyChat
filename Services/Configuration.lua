@@ -12,21 +12,22 @@ local defaults = {
     tabFont = "inherit", tabFontSize = -1, tabFontOutline = "inherit", tabBorderMode = "inherit",
     tabBorderStyle = "legacy", tabBorderColor = {1, 0.78, 0.2}, tabBorderAlpha = 1,
     tabOffsetX = 0, tabOffsetY = 0, tabWidth = 0, tabHeight = 0,
-    tabBackground = "native", tabBackgroundColor = {0.02,0.02,0.02}, tabBackgroundAlpha = 0.65,
+    tabsAlwaysVisible = false, tabBackground = "native", tabBackgroundColor = {0.02,0.02,0.02}, tabBackgroundAlpha = 0.65,
     backgroundMarginTop = -1, backgroundMarginBottom = -1, backgroundMarginLeft = -1, backgroundMarginRight = -1,
     tabColorMode = "native", tabActiveColor = {1, 0.82, 0}, tabInactiveColor = {0.7, 0.7, 0.7},
     tabShadowMode = "native", tabShadowColor = {0, 0, 0}, tabShadowAlpha = 1, tabShadowX = 1, tabShadowY = -1,
 }
 local editboxDefaults = {position = "bottom", fontSize = 14, arrowKeys = true,
-    font = "native", fontOutline = "native", width = 0, height = 0, gap = 2,
+    font = "native", fontOutline = "native", width = 0, height = 0, gap = 2, offsetX = 0, offsetY = 0,
+    marginLeft = 0, marginRight = 0, marginTop = 0, marginBottom = 0,
     shadowMode = "native", shadowColor = {0, 0, 0}, shadowAlpha = 1, shadowX = 1, shadowY = -1,
     backgroundColor = {0.02, 0.02, 0.02}, backgroundAlpha = -1, goldBorder = false,
     borderStyle = "legacy", borderColor = {1, 0.78, 0.2}, borderAlpha = 1}
-local historyDefaults = {enabled = true, persist = false, limit = 500}
+local historyDefaults = {enabled = false, persist = false, limit = 500}
 local Moderation = BootyChat.Services.Moderation
 local fonts = {native = true, friz = true, arial = true, morpheus = true, skurri = true}
 local outlines = {native = true, none = true, OUTLINE = true, THICKOUTLINE = true}
-local positions = {native = true, top = true, bottom = true}
+local positions = {native = true, top = true, bottom = true, free = true}
 local shadowModes = {native = true, custom = true}
 local fadingModes = {native = true, on = true, off = true}
 local borderModes = {inherit = true, on = true, off = true}
@@ -93,6 +94,8 @@ function Configuration.ValidateValue(key, value, editbox)
     elseif key == "tabBackground" then valid = value == "native" or value == "color" or value == "tooltip" or value == "dialog"
     elseif string.find(key,"^backgroundMargin") then valid = value == -1 or Integer(value,0,256)
     elseif key == "tabBackgroundAlpha" then valid = Finite(value) and value >= 0 and value <= 1
+    elseif key == "offsetX" or key == "offsetY" then valid = Integer(value,-4096,4096)
+    elseif string.find(key,"^margin") then valid = Integer(value,0,128)
     elseif key == "gap" then valid = Finite(value) and value >= -512 and value <= 512
     elseif key == "timeVisible" then valid = Integer(value, 0, 3600)
     elseif key == "fadeDuration" then valid = value == 0 or Finite(value) and value >= 0.1 and value <= 30

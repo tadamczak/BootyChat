@@ -284,6 +284,16 @@ function Runtime.SetOption(id, key, value)
     end
     return Commit(store, target, key, value)
 end
+function Runtime.IsInputEditing() return Native.GetState().inputEditing and true or false end
+local function SaveInputPosition(x,y)
+    local valid,failure=Configuration.ValidateValue("offsetX",x,true);if not valid then return false,failure end
+    valid,failure=Configuration.ValidateValue("offsetY",y,true);if not valid then return false,failure end
+    local store,reason=Chat.Database.Ensure();if not store then return false,reason end
+    local preferences=Configuration.Copy(store.editbox)
+    preferences.position,preferences.offsetX,preferences.offsetY="free",x,y
+    return Commit(store,store,"editbox",preferences)
+end
+function Runtime.SetInputEditing(value) return Native.SetInputEditing(value,SaveInputPosition) end
 function Runtime.SetEditboxOption(key, value)
     local valid, failure = Configuration.ValidateValue(key, value, true)
     if not valid then return false, failure end
@@ -372,12 +382,13 @@ function Runtime.ClearHistory(windowId)
     return true
 end
 function Runtime.Open(command)
+    if command=="unlockinput" or command=="lockinput" then return Runtime.SetInputEditing(command=="unlockinput") end
     if command == "enable" or command == "disable" then
         local ok, failure = Runtime.SetEnabled(command == "enable")
         return ok, failure
     end
     if command ~= "" and command ~= "settings" and command ~= "history" then
-        local message = "Use /bc, /bc settings, /bc history, /bc enable or /bc disable."
+        local message = "Use /bc, /bc settings, /bc history, /bc enable, /bc disable, /bc unlockinput or /bc lockinput."
         return false, message
     end
     if not state.host and BootyLib.Core.Runtime.started then
