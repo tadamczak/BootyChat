@@ -407,11 +407,12 @@ local function Appearance(record, options)
         Must(record.surface.ClearAllPoints, record.surface)
         Must(record.surface.SetPoint, record.surface, "TOPLEFT", record.frame, "TOPLEFT", -options.backgroundMarginLeft, options.backgroundMarginTop)
         Must(record.surface.SetPoint, record.surface, "BOTTOMRIGHT", record.frame, "BOTTOMRIGHT", options.backgroundMarginRight, -options.backgroundMarginBottom)
-        UI.Window.ApplyProjectSurface(record.surface)
+        UI.Window.ApplyProjectSurface(record.surface,options.borderScalePct/100)
         local color = options.backgroundColor
-        Must(record.surface.SetBackdropColor, record.surface, color[1], color[2], color[3], math.max(0, options.backgroundAlpha))
+        Must(record.surface.SetBackdropColor, record.surface, color[1], color[2], color[3], options.backgroundTexture=="color" and math.max(0, options.backgroundAlpha) or 0)
         local r, g, b = record.surface:GetBackdropBorderColor()
-        Must(record.surface.SetBackdropBorderColor, record.surface, r, g, b, options.goldBorder and options.borderAlpha or 0)
+        Must(record.surface.SetBackdropBorderColor, record.surface, r, g, b, options.goldBorder and options.borderTexture=="project" and options.borderAlpha or 0)
+        UI.ExtractedSurface.Apply(record.surface,options.backgroundTexture,options.borderTexture,options.goldBorder,options.borderScalePct,options.backgroundAlpha,options.borderAlpha)
         Must(record.surface.Show, record.surface)
     elseif record.surface then Must(record.surface.Hide, record.surface) end
     for _, name in ipairs(textureNames) do

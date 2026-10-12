@@ -2,6 +2,7 @@ local Configuration = {}
 BootyChat.Services.Configuration = Configuration
 
 local defaults = {
+    backgroundTexture="color", borderTexture="project", borderScalePct=100,
     font = "native", fontSize = 14, fontOutline = "OUTLINE",
     backgroundColor = {0.02, 0.02, 0.02}, backgroundAlpha = 0.65,
     goldBorder = true, wheel = true, wheelSpeed = 3, shiftScroll = true,
@@ -80,6 +81,9 @@ function Configuration.ValidateValue(key, value, editbox)
     elseif key == "tabBorderMode" then valid = type(value) == "string" and borderModes[value]
     elseif key == "borderStyle" or key == "tabBorderStyle" then
         valid = type(value) == "string" and (borderStyles[value] or key == "tabBorderStyle" and value == "inherit")
+    elseif key == "backgroundTexture" then valid = type(value)=="string" and (value=="color" or BootyLib.UI.Components.ExtractedTextures.backgrounds[value]~=nil)
+    elseif key == "borderTexture" then valid = type(value)=="string" and (value=="project" or BootyLib.UI.Components.ExtractedTextures.chatBorders[value]~=nil)
+    elseif key == "borderScalePct" then valid = Integer(value,25,300)
     elseif key == "backgroundAlpha" then valid = Finite(value) and (value == -1 or value >= 0 and value <= 1)
     elseif key == "shadowAlpha" or key == "tabShadowAlpha" or key == "borderAlpha" or key == "tabBorderAlpha" then
         valid = Finite(value) and value >= 0 and value <= 1

@@ -1,5 +1,9 @@
 # Changelog
 
+## 0.1.0-dev.14 — 2026-10-12
+
+- Select azure, fine-gold or parchment backgrounds and extracted chat borders with independent border scale and opacity; preserve window overrides and native resizing.
+
 ## 0.1.0-dev.13 — 2026-10-11
 
 - Add persistent tab visibility and match native artwork, hover and hit bounds to custom tab sizes; solid colors replace native textures.

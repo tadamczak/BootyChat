@@ -18,7 +18,8 @@ scrolling and the shared input box.
 - Global appearance with individual native-window overrides and independent copies.
 - Font family, size, outline, shadow color and offset, and line spacing.
 - Message fading, visibility time and fade duration.
-- Background color, opacity and separate top/bottom/left/right margins; Booty gold borders with adjustable opacity.
+- Solid, azure, fine-gold and parchment backgrounds with opacity and separate margins.
+- Project, azure-crystal and fine-gold window borders with scale and opacity. Extracted corners keep their shape when the chat resizes.
 - Separate tab width/height, solid or textured backgrounds, fonts, shadows, active/inactive text colors, border styles/colors and position offsets.
 - Mouse-wheel speed, Shift-wheel to the top or bottom, optional scroll-button hiding.
 - Native window-size overrides and input position, width, minimum height, gap and arrow-key behavior.
@@ -153,3 +154,5 @@ After unlocking a chat window, drag its native tab and release the mouse to fini
 Chat > Global > Tabs offers Keep tabs always visible. Individual windows can override it. Custom tab heights apply to their artwork and clickable rectangle; choosing Solid color hides native artwork.
 
 Chat > Input > Behavior provides separate left/right/top/bottom content margins. Choose Free position for X/Y coordinates, or enable Unlock input for dragging. Drag the visible input, then uncheck the option or use `/bc lockinput`; `/bc unlockinput` starts editing. Position is saved in appearance profiles; unlocking is temporary and covers the typing area until locked. An initially hidden input is hidden again when editing finishes.
+
+In **Appearance → Background**, choose **Background texture** and **Border texture**. **Show border** enables the selected border; its scale and opacity are independent of the background opacity. These settings can be global or specific to a chat window. Install the accompanying BootyLib dev.42 or newer.
